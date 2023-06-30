@@ -98,7 +98,6 @@ namespace cryptonote
   class tx_memory_pool: boost::noncopyable
   {
   public:
-
     /**
      * @copydoc add_tx(transaction&, tx_verification_context&, bool, bool, uint8_t)
      *
@@ -681,7 +680,7 @@ private:
     //! Next timestamp that a DB check for relayable txes is allowed
     std::atomic<time_t> m_next_check;
 
-    friend struct BlockchainAndPool;
+    friend class BlockchainAndPool;
   };
 }
 

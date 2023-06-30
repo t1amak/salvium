@@ -1098,8 +1098,8 @@ namespace cryptonote
      uint64_t m_test_drop_download_height = 0; //!< height under which to drop incoming blocks, if doing so
 
      BlockchainAndPool m_bap; //! Contains owned instances of Blockchain and tx_memory_pool
-     tx_memory_pool& m_mempool; //!< transaction pool instance
-     Blockchain& m_blockchain_storage; //!< Blockchain instance
+     tx_memory_pool& m_mempool; //!< ref to transaction pool instance in m_bap
+     Blockchain& m_blockchain_storage; //!< ref to Blockchain instance in m_bap
 
      i_cryptonote_protocol* m_pprotocol; //!< cryptonote protocol instance
 

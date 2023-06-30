@@ -113,13 +113,6 @@ namespace cryptonote
     };
 
     /**
-     * @brief Blockchain constructor
-     *
-     * @param tx_pool a reference to the transaction pool to be kept by the Blockchain
-     */
-    Blockchain(tx_memory_pool& tx_pool);
-
-    /**
      * @brief Blockchain destructor
      */
     ~Blockchain();
@@ -1315,10 +1308,12 @@ namespace cryptonote
     mutable rct_ver_cache_t m_rct_ver_cache;
 
     /**
-     * @brief hashmap linking blockchain height to YBI struct for that height
+     * @brief Blockchain constructor
+     *
+     * @param tx_pool a reference to the transaction pool to be kept by the Blockchain
      */
-    std::map<uint64_t, yield_block_info> m_yield_block_info_cache;
-    
+    Blockchain(tx_memory_pool& tx_pool);
+
     /**
      * @brief collects the keys for all outputs being "spent" as an input
      *
@@ -1722,6 +1717,6 @@ namespace cryptonote
      */
     void send_miner_notifications(uint64_t height, const crypto::hash &seed_hash, const crypto::hash &prev_id, uint64_t already_generated_coins);
 
-    friend struct BlockchainAndPool;
+    friend class BlockchainAndPool;
   };
 }  // namespace cryptonote
