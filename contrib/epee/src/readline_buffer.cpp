@@ -1,5 +1,4 @@
 #include "readline_buffer.h"
-#include "string_tools.h"
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <iostream>
