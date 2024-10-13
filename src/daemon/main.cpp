@@ -124,7 +124,7 @@ bool isFat32(const wchar_t* root_path)
 
 // Helper function to generate genesis transaction
 void print_genesis_tx_hex(const cryptonote::network_type nettype) {
-
+  /*
   using namespace cryptonote;
 
   account_base miner_acc1;
@@ -168,7 +168,7 @@ void print_genesis_tx_hex(const cryptonote::network_type nettype) {
   std::string tx_hex = ss.str();
   std::cout << "Insert this line into your coin configuration file: " << std::endl;
   std::cout << "std::string const GENESIS_TX = \"" << epee::string_tools::buff_to_hex_nodelimer(tx_hex) << "\";" << std::endl;
-
+  */
   return;
 }
 

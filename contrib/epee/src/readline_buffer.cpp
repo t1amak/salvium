@@ -174,7 +174,7 @@ static void handle_line(char* line)
     line_stat = rdln::full;
     the_line = line;
     std::string test_line = line;
-    epee::string_tools::trim_right(test_line);
+    boost::trim_right(test_line);
     if(!test_line.empty())
     {
       if (!same_as_last_line(test_line))
