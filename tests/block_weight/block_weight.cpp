@@ -65,6 +65,10 @@ public:
                         , uint64_t num_rct_outs
                         , oracle::asset_type_counts& cum_rct_by_asset_type
                         , const crypto::hash& blk_hash
+                        , uint64_t slippage_total
+                        , uint64_t yield_total
+                        , const cryptonote::network_type nettype
+                        , cryptonote::yield_block_info& ybi
                         ) override {
     blocks.push_back({block_weight, long_term_block_weight});
   }
@@ -146,7 +150,8 @@ static void test(test_t t, uint64_t blocks)
     cryptonote::block b;
     b.major_version = 1;
     b.minor_version = 1;
-    bc->get_db().add_block(std::make_pair(b, ""), 300000, 300000, bc->get_db().height(), bc->get_db().height(), {});
+    cryptonote::yield_block_info ybi;
+    bc->get_db().add_block(std::make_pair(b, ""), 300000, 300000, bc->get_db().height(), bc->get_db().height(), {}, cryptonote::FAKECHAIN, ybi);
     if (!bc->update_next_cumulative_weight_limit())
     {
       fprintf(stderr, "Failed to update cumulative weight limit 1\n");
@@ -180,7 +185,8 @@ static void test(test_t t, uint64_t blocks)
     cryptonote::block b;
     b.major_version = HF_VERSION_2021_SCALING;
     b.minor_version = HF_VERSION_2021_SCALING;
-    bc->get_db().add_block(std::make_pair(std::move(b), ""), w, ltw, bc->get_db().height(), bc->get_db().height(), {});
+    cryptonote::yield_block_info ybi;
+    bc->get_db().add_block(std::make_pair(std::move(b), ""), w, ltw, bc->get_db().height(), bc->get_db().height(), {}, cryptonote::FAKECHAIN, ybi);
 
     if (!bc->update_next_cumulative_weight_limit())
     {
