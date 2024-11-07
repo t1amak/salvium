@@ -38,6 +38,7 @@ set(unit_tests_sources
   bulletproofs.cpp
   bulletproofs_plus.cpp
   canonical_amounts.cpp
+  carrot.cpp
   chacha.cpp
   checkpoints.cpp
   command_line.cpp
@@ -121,6 +122,7 @@ target_link_libraries(unit_tests
     lmdb_lib
     rpc
     net
+    seraphis_crypto
     serialization
     wallet
     p2p

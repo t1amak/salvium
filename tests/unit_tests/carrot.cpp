@@ -1,3 +1,6 @@
+/**
+ * Unit tests for prototype Carrot functions
+ */
 #include "common/util.h"
 #include "crypto/crypto.h"
 #include "ringct/rctTypes.h"
