@@ -33,13 +33,17 @@
 extern "C"
 {
 #include "crypto-ops.h"
+#include "mx25519.h"
 }
+#include "cryptonote_config.h"
 #include "hash.h"
+#include "x25519.h"
 
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <string>
 
 namespace crypto
 {
@@ -79,9 +83,27 @@ static ge_cached G_cached;
 static ge_cached H_cached;
 static ge_cached T_cached;
 
+// Curve25519 generator B: generator of G_1
+static const x25519_pubkey B{ mx25519_pubkey{ .data = { 9 } } };
+
 // misc
 static std::once_flag init_gens_once_flag;
 
+//-------------------------------------------------------------------------------------------------------------------
+// hash-to-point: H_p(x) = 8*point_from_bytes(keccak(x))
+//-------------------------------------------------------------------------------------------------------------------
+static void hash_to_point(const hash &x, crypto::ec_point &point_out)
+{
+    hash h;
+    ge_p3 temp_p3;
+    ge_p2 temp_p2;
+    ge_p1p1 temp_p1p1;
+    crypto::cn_fast_hash(reinterpret_cast<const unsigned char*>(&x), sizeof(hash), h);
+    ge_fromfe_frombytes_vartime(&temp_p2, reinterpret_cast<const unsigned char*>(&h));
+    ge_mul8(&temp_p1p1, &temp_p2);
+    ge_p1p1_to_p3(&temp_p3, &temp_p1p1);
+    ge_p3_tobytes(to_bytes(point_out), &temp_p3);
+}
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static public_key reproduce_generator_G()
@@ -129,12 +151,12 @@ static public_key reproduce_generator_H()
 //-------------------------------------------------------------------------------------------------------------------
 static public_key reproduce_generator_T()
 {
-    // T = H_p(keccak("monero generator T"))
-    const constexpr char HASH_KEY_MONERO_GENERATOR_T[] = "monero generator T";
+    // T = H_p(keccak("Monero Generator T"))
+    const constexpr char HASH_KEY_MONERO_GENERATOR_T[] = "Monero Generator T";
     const std::string T_salt{HASH_KEY_MONERO_GENERATOR_T};
-    //hash T_temp_hash{cn_fast_hash(T_salt.data(), T_salt.size())};
+    hash T_temp_hash{crypto::cn_fast_hash(T_salt.data(), T_salt.size())};
     public_key reproduced_T;
-    //hash_to_point(T_temp_hash, reproduced_T);
+    hash_to_point(T_temp_hash, reproduced_T);
 
     return reproduced_T;
 }
