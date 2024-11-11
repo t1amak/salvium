@@ -37,6 +37,7 @@
 #include "cryptonote_core/blockchain.h"
 #include "blockchain_db/blockchain_db.h"
 #include "oracle/pricing_record.h"
+#include "time_helper.h"
 #include "version.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY

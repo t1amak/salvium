@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2022, The Monero Project
+# Copyright (c) 2014-2024, The Monero Project
 #
 # All rights reserved.
 #
@@ -81,7 +81,7 @@ target_link_libraries(cncrypto
 target_include_directories(cncrypto
   PRIVATE
     ${MX25519_INCLUDE})
-    
+
 if (ARM)
   option(NO_OPTIMIZED_MULTIPLY_ON_ARM
 	   "Compute multiply using generic C implementation instead of ARM ASM" OFF)

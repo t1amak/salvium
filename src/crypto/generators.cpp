@@ -1,5 +1,4 @@
-// Copyright (c) 2022, The Monero Project
-// Portions Copyright (c) 2024, Salvium (author: SRCG)
+// Copyright (c) 2022-2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -33,17 +32,14 @@
 extern "C"
 {
 #include "crypto-ops.h"
-#include "mx25519.h"
 }
-#include "cryptonote_config.h"
 #include "hash.h"
-#include "x25519.h"
 
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
-#include <string>
+#include <string_view>
 
 namespace crypto
 {
@@ -73,7 +69,7 @@ constexpr public_key G = bytes_to<public_key>({ 0x58, 0x66, 0x66, 0x66, 0x66, 0x
 //pedersen commitment generator H: toPoint(cn_fast_hash(G))
 constexpr public_key H = bytes_to<public_key>({ 0x8b, 0x65, 0x59, 0x70, 0x15, 0x37, 0x99, 0xaf, 0x2a, 0xea, 0xdc, 0x9f, 0xf1,
     0xad, 0xd0, 0xea, 0x6c, 0x72, 0x51, 0xd5, 0x41, 0x54, 0xcf, 0xa9, 0x2c, 0x17, 0x3a, 0x0d, 0xd3, 0x9c, 0x1f, 0x94 });
-//monero generator T: toPoint(cn_fast_hash(Keccak256("Monero generator T")))
+//seraphis generator T: keccak_to_pt(keccak("Monero Generator T"))
 constexpr public_key T = bytes_to<public_key>({ 0x96, 0x6f, 0xc6, 0x6b, 0x82, 0xcd, 0x56, 0xcf, 0x85, 0xea, 0xec, 0x80, 0x1c,
     0x42, 0x84, 0x5f, 0x5f, 0x40, 0x88, 0x78, 0xd1, 0x56, 0x1e, 0x00, 0xd3, 0xd7, 0xde, 0xd2, 0x79, 0x4d, 0x09, 0x4f });
 static ge_p3 G_p3;
@@ -82,9 +78,6 @@ static ge_p3 T_p3;
 static ge_cached G_cached;
 static ge_cached H_cached;
 static ge_cached T_cached;
-
-// Curve25519 generator B: generator of G_1
-static const x25519_pubkey B{ mx25519_pubkey{ .data = { 9 } } };
 
 // misc
 static std::once_flag init_gens_once_flag;
@@ -98,7 +91,8 @@ static void hash_to_point(const hash &x, crypto::ec_point &point_out)
     ge_p3 temp_p3;
     ge_p2 temp_p2;
     ge_p1p1 temp_p1p1;
-    crypto::cn_fast_hash(reinterpret_cast<const unsigned char*>(&x), sizeof(hash), h);
+
+    cn_fast_hash(reinterpret_cast<const unsigned char*>(&x), sizeof(hash), h);
     ge_fromfe_frombytes_vartime(&temp_p2, reinterpret_cast<const unsigned char*>(&h));
     ge_mul8(&temp_p1p1, &temp_p2);
     ge_p1p1_to_p3(&temp_p3, &temp_p1p1);
@@ -151,10 +145,9 @@ static public_key reproduce_generator_H()
 //-------------------------------------------------------------------------------------------------------------------
 static public_key reproduce_generator_T()
 {
-    // T = H_p(keccak("Monero Generator T"))
-    const constexpr char HASH_KEY_MONERO_GENERATOR_T[] = "Monero Generator T";
-    const std::string T_salt{HASH_KEY_MONERO_GENERATOR_T};
-    hash T_temp_hash{crypto::cn_fast_hash(T_salt.data(), T_salt.size())};
+    // U = H_p(keccak("Monero Generator T"))
+    const std::string_view T_seed{"Monero Generator T"};
+    const hash T_temp_hash{cn_fast_hash(T_seed.data(), T_seed.size())};
     public_key reproduced_T;
     hash_to_point(T_temp_hash, reproduced_T);
 

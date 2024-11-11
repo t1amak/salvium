@@ -11453,7 +11453,7 @@ std::vector<wallet2::pending_tx> wallet2::create_transactions_return(std::vector
   
   LOG_ERROR("*****************************************************************************");
   LOG_ERROR("TX type   : RETURN");
-  LOG_ERROR("a         : " << m_account.get_keys().m_view_secret_key);
+  LOG_ERROR("a         : " << crypto::secret_key_explicit_print_ref{m_account.get_keys().m_view_secret_key});
   LOG_ERROR("F         : " << key_F);
   LOG_ERROR("y         : " << key_y);
   LOG_ERROR("P_change  : " << P_change);

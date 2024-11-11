@@ -502,7 +502,7 @@ namespace cryptonote
       crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
       crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
       bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
+      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << crypto::secret_key_explicit_print_ref{txkey.sec} << ")");
 
       r = crypto::derive_public_key(derivation, tx.vout.size(), miner_address.m_spend_public_key, out_eph_public_key);
       CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
@@ -515,7 +515,7 @@ namespace cryptonote
       crypto::key_derivation derivation_treasury = AUTO_VAL_INIT(derivation_treasury);
       crypto::public_key out_eph_public_key_treasury = AUTO_VAL_INIT(out_eph_public_key_treasury);
       r = crypto::generate_key_derivation(treasury_address.m_view_public_key, txkey.sec, derivation_treasury);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << treasury_address.m_view_public_key << ", " << txkey.sec << ")");
+      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << treasury_address.m_view_public_key << ", " << crypto::secret_key_explicit_print_ref{txkey.sec} << ")");
 
       r = crypto::derive_public_key(derivation_treasury, tx.vout.size(), treasury_address.m_spend_public_key, out_eph_public_key_treasury);
       CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
@@ -564,21 +564,12 @@ namespace cryptonote
 #endif
     block_reward += fee;
     uint64_t summary_amounts = 0;
-<<<<<<< HEAD
     CHECK_AND_ASSERT_MES(1 <= max_outs, false, "max_out must be non-zero");
-=======
-    for (size_t no = 0; no < out_amounts.size(); no++)
-    {
-      crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
-      crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
-      bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << crypto::secret_key_explicit_print_ref{txkey.sec} << ")");
->>>>>>> ed955bf75 (build: fix build with Boost 1.85 and remove instances of viewkey logging)
 
     crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
     crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
     bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
-    CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
+    CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << crypto::secret_key_explicit_print_ref{txkey.sec} << ")");
 
     r = crypto::derive_public_key(derivation, 0, miner_address.m_spend_public_key, out_eph_public_key);
     CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
@@ -896,7 +887,7 @@ namespace cryptonote
       LOG_ERROR("*****************************************************************************");
       LOG_ERROR("in construct_tx_With_tx_key()");
       LOG_ERROR("TX type   : TRANSFER");
-      LOG_ERROR("tx_key    : " << tx_key);
+      LOG_ERROR("tx_key    : " << crypto::secret_key_explicit_print_ref{tx_key});
       LOG_ERROR("tx_pubkey : " << txkey_pub);
       LOG_ERROR("P_change  : " << dst_entr.addr.m_spend_public_key);
       LOG_ERROR("aP_change : " << dst_entr.addr.m_view_public_key);

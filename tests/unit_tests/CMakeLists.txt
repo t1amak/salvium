@@ -116,6 +116,7 @@ monero_add_minimal_executable(unit_tests
 target_link_libraries(unit_tests
   PRIVATE
     ringct
+    carrot_core
     cryptonote_protocol
     cryptonote_core
     daemon_messages
