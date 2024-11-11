@@ -39,6 +39,8 @@ set(unit_tests_sources
   bulletproofs_plus.cpp
   canonical_amounts.cpp
   carrot.cpp
+  carrot_core.cpp
+  carrot_transcript_fixed.cpp
   chacha.cpp
   checkpoints.cpp
   command_line.cpp
