@@ -174,6 +174,14 @@ void make_carrot_input_context_coinbase(const std::uint64_t block_index, input_c
     memcpy_swap64le(input_context_out.bytes + 1, &block_index, 1);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void make_carrot_input_context_protocol(const std::uint64_t block_index, input_context_t &input_context_out)
+{
+    // input_context = "P" || IntToBytes256(block_index)
+    memset(input_context_out.bytes, 0, sizeof(input_context_t));
+    input_context_out.bytes[0] = CARROT_DOMAIN_SEP_INPUT_CONTEXT_PROTOCOL;
+    memcpy_swap64le(input_context_out.bytes + 1, &block_index, 1);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void make_carrot_input_context(const crypto::key_image &first_rct_key_image, input_context_t &input_context_out)
 {
     // input_context = "R" || KI_1

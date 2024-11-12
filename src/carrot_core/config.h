@@ -53,6 +53,7 @@ static constexpr const unsigned char CARROT_DOMAIN_SEP_EPHEMERAL_PRIVKEY[] = "Ca
 static constexpr const unsigned char CARROT_DOMAIN_SEP_VIEW_TAG[] = "Carrot view tag";
 static constexpr const unsigned char CARROT_DOMAIN_SEP_SENDER_RECEIVER_SECRET[] = "Carrot sender-receiver secret";
 static constexpr const unsigned char CARROT_DOMAIN_SEP_INPUT_CONTEXT_COINBASE = 'C';
+static constexpr const unsigned char CARROT_DOMAIN_SEP_INPUT_CONTEXT_PROTOCOL = 'P';
 static constexpr const unsigned char CARROT_DOMAIN_SEP_INPUT_CONTEXT_RINGCT = 'R';
 
 // Carrot account secret domain separators

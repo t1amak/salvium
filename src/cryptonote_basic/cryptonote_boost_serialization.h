@@ -91,6 +91,16 @@ namespace boost
   {
     a & reinterpret_cast<char (&)[sizeof(crypto::hash8)]>(x);
   }
+  template <class Archive>
+  inline void serialize(Archive &a, carrot::encrypted_janus_anchor_t &x, const boost::serialization::version_type ver)
+  {
+    a & reinterpret_cast<char (&)[sizeof(carrot::encrypted_janus_anchor_t)]>(x);
+  }
+  template <class Archive>
+  inline void serialize(Archive &a, carrot::view_tag_t &x, const boost::serialization::version_type ver)
+  {
+    a & reinterpret_cast<char (&)[sizeof(carrot::view_tag_t)]>(x);
+  }
 
   template <class Archive>
   inline void serialize(Archive &a, cryptonote::txout_to_script &x, const boost::serialization::version_type ver)
@@ -114,6 +124,16 @@ namespace boost
     a & x.key;
     a & x.asset_type;
     a & x.unlock_time;
+    a & x.view_tag;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::txout_to_carrot_key &x, const boost::serialization::version_type ver)
+  {
+    a & x.key;
+    a & x.asset_type;
+    a & x.unlock_time;
+    a & x.anchor;
     a & x.view_tag;
   }
 

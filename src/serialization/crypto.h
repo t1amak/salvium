@@ -37,6 +37,7 @@
 #include "crypto/chacha.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
+#include "carrot_core/core_types.h"
 
 // read
 template <template <bool> class Archive>
@@ -86,6 +87,8 @@ BLOB_SERIALIZER(crypto::key_derivation);
 BLOB_SERIALIZER(crypto::key_image);
 BLOB_SERIALIZER(crypto::signature);
 BLOB_SERIALIZER(crypto::view_tag);
+BLOB_SERIALIZER(carrot::encrypted_janus_anchor_t);
+BLOB_SERIALIZER(carrot::view_tag_t);
 VARIANT_TAG(debug_archive, crypto::hash, "hash");
 VARIANT_TAG(debug_archive, crypto::hash8, "hash8");
 VARIANT_TAG(debug_archive, crypto::public_key, "public_key");
@@ -94,4 +97,6 @@ VARIANT_TAG(debug_archive, crypto::key_derivation, "key_derivation");
 VARIANT_TAG(debug_archive, crypto::key_image, "key_image");
 VARIANT_TAG(debug_archive, crypto::signature, "signature");
 VARIANT_TAG(debug_archive, crypto::view_tag, "view_tag");
+VARIANT_TAG(debug_archive, carrot::encrypted_janus_anchor_t, "janus_anchor");
+VARIANT_TAG(debug_archive, carrot::view_tag_t, "carrot_view_tag");
 

@@ -233,6 +233,61 @@ void get_coinbase_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
     output_enote_out.block_index = block_index;
 }
 //-------------------------------------------------------------------------------------------------------------------
+void get_protocol_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
+    const std::uint64_t block_index,
+    CarrotCoinbaseEnoteV1 &output_enote_out)
+{
+    // 1. sanity checks
+    CHECK_AND_ASSERT_THROW_MES(proposal.randomness != null_anchor,
+        "get protocol output proposal v1: invalid randomness for janus anchor (zero).");
+    CHECK_AND_ASSERT_THROW_MES(!proposal.destination.is_subaddress,
+        "get protocol output proposal v1: subaddresses aren't allowed as destinations of protocol outputs");
+    CHECK_AND_ASSERT_THROW_MES(proposal.destination.payment_id == null_payment_id,
+        "get protocol output proposal v1: integrated addresses aren't allowed as destinations of protocol outputs");
+
+    // 2. protocol input context
+    input_context_t input_context;
+    make_carrot_input_context_protocol(block_index, input_context);
+
+    // 3. make D_e and do external ECDH
+    crypto::x25519_pubkey s_sender_receiver_unctx; auto dhe_wiper = auto_wiper(s_sender_receiver_unctx);
+    get_normal_proposal_ecdh_parts(proposal,
+        input_context,
+        output_enote_out.enote_ephemeral_pubkey,
+        s_sender_receiver_unctx);
+
+    // 4. build the output enote address pieces
+    crypto::hash s_sender_receiver; auto q_wiper = auto_wiper(s_sender_receiver);
+    crypto::secret_key dummy_amount_blinding_factor;
+    rct::key dummy_amount_commitment;
+    encrypted_amount_t dummy_encrypted_amount;
+    encrypted_payment_id_t dummy_encrypted_payment_id;
+    get_output_proposal_parts(s_sender_receiver_unctx.data,
+        proposal.destination.address_spend_pubkey,
+        null_payment_id,
+        proposal.amount,
+        CarrotEnoteType::PAYMENT,
+        output_enote_out.enote_ephemeral_pubkey,
+        input_context,
+        true,
+        s_sender_receiver,
+        dummy_amount_blinding_factor,
+        dummy_amount_commitment,
+        output_enote_out.onetime_address,
+        dummy_encrypted_amount,
+        dummy_encrypted_payment_id,
+        output_enote_out.view_tag);
+    
+    // 5. anchor_enc = anchor XOR m_anchor
+    output_enote_out.anchor_enc = encrypt_carrot_anchor(proposal.randomness,
+        s_sender_receiver,
+        output_enote_out.onetime_address);
+
+    // 6. save the amount and block index
+    output_enote_out.amount = proposal.amount;
+    output_enote_out.block_index = block_index;
+}
+//-------------------------------------------------------------------------------------------------------------------
 void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
     const crypto::key_image &tx_first_key_image,
     CarrotEnoteV1 &output_enote_out,

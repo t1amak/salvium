@@ -114,22 +114,22 @@ namespace cryptonote
     END_SERIALIZE()
   };
 
-  struct txout_to_salvium_key
+  struct txout_to_carrot_key
   {
-    txout_to_salvium_key() { }
-    txout_to_salvium_key(const crypto::public_key &_key, const std::string &_asset_type, const uint64_t _unlock_time, const carrot::view_tag_t &_view_tag, const carrot::encrypted_janus_anchor_t &_anchor) : key(_key), asset_type(_asset_type), unlock_time(_unlock_time), view_tag(_view_tag), anchor(_anchor) { }
+    txout_to_carrot_key() { }
+    txout_to_carrot_key(const crypto::public_key &_key, const std::string &_asset_type, const uint64_t _unlock_time, const carrot::view_tag_t &_view_tag, const carrot::encrypted_janus_anchor_t &_anchor) : key(_key), asset_type(_asset_type), unlock_time(_unlock_time), view_tag(_view_tag), anchor(_anchor) { }
     crypto::public_key key;
     std::string asset_type;
     uint64_t unlock_time;
-    carrot::view_tag_t view_tag;
     carrot::encrypted_janus_anchor_t anchor;
+    carrot::view_tag_t view_tag;
 
     BEGIN_SERIALIZE_OBJECT()
       FIELD(key)
       FIELD(asset_type)
       VARINT_FIELD(unlock_time)
-      FIELD(view_tag)
       FIELD(anchor)
+      FIELD(view_tag)
     END_SERIALIZE()
   };
 
@@ -190,7 +190,7 @@ namespace cryptonote
 
   typedef boost::variant<txin_gen, txin_to_script, txin_to_scripthash, txin_to_key> txin_v;
 
-  typedef boost::variant<txout_to_script, txout_to_scripthash, txout_to_key, txout_to_tagged_key> txout_target_v;
+  typedef boost::variant<txout_to_script, txout_to_scripthash, txout_to_key, txout_to_tagged_key, txout_to_carrot_key> txout_target_v;
 
   //typedef std::pair<uint64_t, txout> out_t;
   struct tx_out
@@ -746,7 +746,7 @@ VARIANT_TAG(binary_archive, cryptonote::txout_to_script, 0x0);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_scripthash, 0x1);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_key, 0x2);
 VARIANT_TAG(binary_archive, cryptonote::txout_to_tagged_key, 0x3);
-VARIANT_TAG(binary_archive, cryptonote::txout_to_salvium_key, 0x4);
+VARIANT_TAG(binary_archive, cryptonote::txout_to_carrot_key, 0x4);
 VARIANT_TAG(binary_archive, cryptonote::transaction, 0xcc);
 VARIANT_TAG(binary_archive, cryptonote::block, 0xbb);
 
@@ -758,7 +758,7 @@ VARIANT_TAG(json_archive, cryptonote::txout_to_script, "script");
 VARIANT_TAG(json_archive, cryptonote::txout_to_scripthash, "scripthash");
 VARIANT_TAG(json_archive, cryptonote::txout_to_key, "key");
 VARIANT_TAG(json_archive, cryptonote::txout_to_tagged_key, "tagged_key");
-VARIANT_TAG(json_archive, cryptonote::txout_to_salvium_key, "salvium_key");
+VARIANT_TAG(json_archive, cryptonote::txout_to_carrot_key, "carrot_key");
 VARIANT_TAG(json_archive, cryptonote::transaction, "tx");
 VARIANT_TAG(json_archive, cryptonote::block, "block");
 
@@ -770,6 +770,6 @@ VARIANT_TAG(debug_archive, cryptonote::txout_to_script, "script");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_scripthash, "scripthash");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_key, "key");
 VARIANT_TAG(debug_archive, cryptonote::txout_to_tagged_key, "tagged_key");
-VARIANT_TAG(debug_archive, cryptonote::txout_to_salvium_key, "salvium_key");
+VARIANT_TAG(debug_archive, cryptonote::txout_to_carrot_key, "carrot_key");
 VARIANT_TAG(debug_archive, cryptonote::transaction, "tx");
 VARIANT_TAG(debug_archive, cryptonote::block, "block");

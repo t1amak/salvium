@@ -121,6 +121,13 @@ void make_carrot_view_tag(const unsigned char s_sender_receiver_unctx[32],
 */
 void make_carrot_input_context_coinbase(const std::uint64_t block_index, input_context_t &input_context_out);
 /**
+* brief: make_carrot_input_context_protocol - input context for a sender-receiver secret (protocol txs)
+*    input_context = "P" || IntToBytes256(block_index)
+* param: block_index - block index of the coinbase tx
+* outparam: input_context_out - "P" || IntToBytes256(block_index)
+*/
+void make_carrot_input_context_protocol(const std::uint64_t block_index, input_context_t &input_context_out);
+/**
 * brief: make_carrot_input_context - input context for a sender-receiver secret (standard RingCT txs)
 *    input_context = "R" || KI_1
 * param: first_rct_key_image - KI_1, the first spent RingCT key image in a tx

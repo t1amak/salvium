@@ -103,6 +103,16 @@ void get_coinbase_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
     const std::uint64_t block_index,
     CarrotCoinbaseEnoteV1 &output_enote_out);
 /**
+* brief: get_protocol_output_proposal_v1 - convert the carrot proposal to a protocol_tx output proposal
+* param: proposal -
+* param: block_index - index of the protocol tx's block
+* outparam: output_enote_out -
+* outparam: partial_memo_out -
+*/
+void get_protocol_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
+    const std::uint64_t block_index,
+    CarrotCoinbaseEnoteV1 &output_enote_out);
+/**
 * brief: get_output_proposal_normal_v1 - convert the carrot proposal to an output proposal
 * param: proposal -
 * param: tx_first_key_image -

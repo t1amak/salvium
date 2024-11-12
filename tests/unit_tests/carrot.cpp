@@ -5,7 +5,6 @@
 #include "crypto/crypto.h"
 #include "crypto/generators.h"
 #include "ringct/rctTypes.h"
-#include "seraphis_crypto/sp_hash_functions.h"
 #include "misc_log_ex.h"
 #include <boost/multiprecision/cpp_int.hpp>
 #include <iostream>
@@ -14,7 +13,6 @@
 
 using namespace boost::multiprecision;
 using namespace cryptonote;
-using namespace sp;
 using namespace std;
 
 namespace {  // anonymous namespace
@@ -57,7 +55,8 @@ namespace {  // anonymous namespace
     ge_p1p1_to_p3(&temp_p3, &temp_p1p1);
     ge_p3_tobytes(to_bytes(point_out), &temp_p3);
   }
-  
+
+  /*
   crypto::secret_key SecretDerive(void *hash_in, const std::size_t hash_length)
   {
     CHECK_AND_ASSERT_THROW_MES(hash_in && hash_length, "SecretDerive: invalid input hash");
@@ -72,7 +71,7 @@ namespace {  // anonymous namespace
     sp_hash_to_scalar(data_in, data_length, output.data);
     return output;
   }
-
+  */
   crypto::secret_key ScalarDeriveLegacy(void *data_in, const std::size_t data_length)
   {
     // return BytesToInt256(Keccak256(x)) mod ℓ
@@ -83,105 +82,6 @@ namespace {  // anonymous namespace
     return output;
   }
 
-  /**
-   * Section 5 - Wallets
-   */
-  
-  void make_provespend_key(const crypto::secret_key &k_master_secret, crypto::secret_key &k_provespend_out)
-  {
-    // k_ps = ScalarDerive("Carrot prove-spend key" || s_m)
-    carrot_domain_key_t data = {
-      .domain_separator = {"Carrot prove-spend key"},
-      .key = k_master_secret
-    };
-    k_provespend_out = ScalarDerive(&data, sizeof(carrot_domain_key_t));
-  }
-
-  void make_viewbalance_secret(const crypto::secret_key &k_master_secret, crypto::secret_key &s_viewbalance_out)
-  {
-    // s_vb = SecretDerive("Carrot view-balance secret" || s_m)
-    carrot_domain_key_t data = {
-      .domain_separator = {"Carrot view-balance secret"},
-      .key = k_master_secret
-    };
-    s_viewbalance_out = SecretDerive(&data, sizeof(carrot_domain_key_t));
-  }
-
-  void make_generateimage_key(const crypto::secret_key &k_viewbalance_secret, crypto::secret_key &k_generateimage_out)
-  {
-    // k_gi = ScalarDerive("Carrot generate-image key" || s_vb)
-    carrot_domain_key_t data = {
-      .domain_separator = {"Carrot generate-image key"},
-      .key = k_viewbalance_secret
-    };
-    k_generateimage_out = ScalarDerive(&data, sizeof(carrot_domain_key_t));
-  }
-
-  void make_incomingview_key(const crypto::secret_key &k_viewbalance_secret, crypto::secret_key &k_incomingview_out)
-  {
-    // k_v = ScalarDerive("Carrot incoming view key" || s_vb)
-    carrot_domain_key_t data = {
-      .domain_separator = {"Carrot incoming view key"},
-      .key = k_viewbalance_secret
-    };
-    k_incomingview_out = ScalarDerive(&data, sizeof(carrot_domain_key_t));
-  }
-  
-  void make_generateaddress_secret(const crypto::secret_key &k_viewbalance_secret, crypto::secret_key &s_generateaddress_out)
-  {
-    // s_ga = ScalarDerive("Carrot generate-address secret" || s_vb)
-    carrot_domain_key_t data = {
-      .domain_separator = {"Carrot generate-address secret"},
-      .key = k_viewbalance_secret
-    };
-    s_generateaddress_out = SecretDerive(&data, sizeof(carrot_domain_key_t));
-  }
-
-  /*
-  void ConvertPointE(const crypto::public_key &k_input_point, crypto::x25519_pubkey &k_output_point)
-  {
-    // x = (v + 1) / (1 - v)
-    // where v = k_input_point (y-coordinate), x = k_output_point (x-coordinate)
-    rct::key v = rct::pk2rct(k_input_point);
-    rct::key numerator = addKeys(v, scalarmultBase(1));
-    rct::key denominator = subKeys(scalarmultBase(1), v);
-    rct::key den_inv = rct::inverse(denominator);
-    rct::key x = scalarmultKey(numerator, den_inv);
-    memcpy(k_output_point.data, x.bytes, 32);
-  }
-  */
-  
-  void make_spendkey_public_legacy(const crypto::secret_key &k_spendkey, crypto::public_key &k_spendkey_public_out)
-  {
-    // K_s = k_s.G
-    ge_p3 point;
-    CHECK_AND_ASSERT_THROW_MES(sc_check((uint8_t*)k_spendkey.data) == 0, "make_spendkey_public_legacy: sc_check failed");
-    ge_scalarmult_base(&point, (uint8_t*)k_spendkey.data);
-    ge_p3_tobytes((uint8_t*)k_spendkey_public_out.data, &point);
-  }
-
-  void make_spendkey_public(const crypto::secret_key &k_generateimage, const crypto::secret_key &k_provespend, crypto::public_key &k_spendkey_public_out)
-  {
-    // K_s = k_gi.G + k_ps.T
-  }
-
-  void make_viewkey_public(const crypto::secret_key &k_incomingview, const crypto::public_key &k_spendkey_public, crypto::public_key &k_viewkey_public_out)
-  {
-    // K_v = k_v.K_s
-  }
-
-  /**
-   * Section 6 - Addresses
-   */
-
-  /**
-   * Section 7 = Addressing Protocol
-   */
-
-  /**
-   * s7.4 - enote derivations
-   */
-  
   boost::multiprecision::int256_t BytesToInt256(const std::vector<uint8_t> &data)
   {
     CHECK_AND_ASSERT_THROW_MES(data.size()==32, "BytesToInt256: invalid input data");
@@ -332,15 +232,6 @@ namespace {  // anonymous namespace
     // test ScalarDeriveLegacy(x) function - should calculate a private viewkey from a private spendkey 
     crypto::secret_key k_v_check = ScalarDeriveLegacy((void*)k_s.data, 32);
     EXPECT_TRUE(memcmp(k_v.data, k_v_check.data, 32) == 0);
-
-    // test ScalarDerive(x) and SecretDerive(x) functions
-    crypto::secret_key s_m, k_provespend, s_viewbalance, k_generateimage, k_incomingview, s_generateaddress;
-    memcpy(s_m.data, k_s.data, 32);
-    make_provespend_key(s_m, k_provespend);
-    make_viewbalance_secret(s_m, s_viewbalance);
-    make_generateimage_key(s_viewbalance, k_generateimage);
-    make_incomingview_key(s_viewbalance, k_incomingview);
-    make_generateaddress_secret(s_viewbalance, s_generateaddress);
   }
   
 }  // anonymous namespace
