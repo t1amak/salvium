@@ -1,4 +1,5 @@
 // Copyright (c) 2024, The Monero Project
+// Portions Copyright (c) 2024, Salvium (author: SRCG)
 // 
 // All rights reserved.
 // 

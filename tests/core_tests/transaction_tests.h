@@ -34,3 +34,7 @@
 bool test_genesis_tx();
 bool test_transactions();
 bool test_block_creation();
+
+bool test_transactions_carrot();
+bool test_block_creation_carrot();
+
