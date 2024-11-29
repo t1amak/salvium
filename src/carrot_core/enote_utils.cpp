@@ -219,6 +219,34 @@ void make_carrot_onetime_address_extension_t(const crypto::hash &s_sender_receiv
     derive_scalar(transcript.data(), transcript.size, &s_sender_receiver, &sender_extension_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_receiver,
+    const rct::key &amount_commitment,
+    crypto::secret_key &sender_extension_out)
+{
+    // k^rp = H_n("..rp..", s^ctx_sr, C_a)
+    const auto transcript = sp::make_fixed_transcript<CARROT_DOMAIN_SEP_ONETIME_EXTENSION_RP>(amount_commitment);
+    derive_scalar(transcript.data(), transcript.size, &s_sender_receiver, &sender_extension_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_carrot_return_address(const crypto::hash &s_sender_receiver,
+                                const rct::key &amount_commitment,
+                                const crypto::public_key &onetime_address,
+                                const crypto::secret_key &k_view,
+                                crypto::public_key &f_point_out)
+{
+  // Calculate the k_rp value
+  crypto::secret_key k_rp;
+  make_carrot_onetime_address_extension_rp(s_sender_receiver, amount_commitment, k_rp);
+
+  // Calculate the multiplicative inverse of k_rp (k_rp^-1)
+  rct::key key_inv_rp = rct::invert(rct::sk2rct(k_rp));
+  
+  // Calculate the F point value (F = (k_rp^-1) k_v K_o)
+  rct::key key_temp = rct::scalarmultKey(rct::pk2rct(onetime_address), key_inv_rp);
+  rct::key key_F = rct::scalarmultKey(key_temp, rct::sk2rct(k_view));
+  f_point_out = rct::rct2pk(key_F);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void make_carrot_onetime_address_extension_pubkey(const crypto::hash &s_sender_receiver,
     const rct::key &amount_commitment,
     crypto::public_key &sender_extension_pubkey_out)

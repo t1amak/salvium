@@ -82,20 +82,40 @@ void make_carrot_address_spend_pubkey(const crypto::public_key &spend_pubkey,
         rct::pk2rct(spend_pubkey), rct::sk2rct(subaddress_scalar)));
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_carrot_address(const crypto::public_key &spend_pubkey,
+void make_carrot_address_view_pubkey(const crypto::public_key &spend_pubkey,
     const crypto::secret_key &s_generate_address,
     const std::uint32_t j_major,
     const std::uint32_t j_minor,
     const crypto::secret_key &k_view,
-    crypto::public_key &address_spend_pubkey_out)
+    crypto::public_key &address_view_pubkey_out)
 {
     // K^j_s = k^j_subscal * K_s
     crypto::public_key address_spend_pubkey;
     make_carrot_address_spend_pubkey(spend_pubkey, s_generate_address, j_major, j_minor, address_spend_pubkey);
 
     // K^j_v = k_v * K^j_s
-    address_spend_pubkey_out = rct::rct2pk(rct::scalarmultKey(
+    address_view_pubkey_out = rct::rct2pk(rct::scalarmultKey(
         rct::pk2rct(address_spend_pubkey), rct::sk2rct(k_view)));
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_carrot_address(const crypto::public_key &spend_pubkey,
+    const crypto::secret_key &s_generate_address,
+    const std::uint32_t j_major,
+    const std::uint32_t j_minor,
+    const crypto::secret_key &k_view,
+    std::pair<crypto::public_key, crypto::public_key> &address_pubkeys_out)
+{
+    // K^j_s = k^j_subscal * K_s
+    crypto::public_key address_spend_pubkey;
+    make_carrot_address_spend_pubkey(spend_pubkey, s_generate_address, j_major, j_minor, address_spend_pubkey);
+
+    // K^j_v = k_v * K^j_s
+    crypto::public_key address_view_pubkey = rct::rct2pk(rct::scalarmultKey(
+        rct::pk2rct(address_spend_pubkey), rct::sk2rct(k_view)));
+
+    // Copy the pubkeys into our output pair
+    address_pubkeys_out.first = address_spend_pubkey;
+    address_pubkeys_out.second = address_view_pubkey;
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace carrot

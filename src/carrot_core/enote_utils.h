@@ -171,6 +171,29 @@ void make_carrot_onetime_address_extension_t(const crypto::hash &s_sender_receiv
     const rct::key &amount_commitment,
     crypto::secret_key &sender_extension_out);
 /**
+* brief: make_carrot_onetime_address_extension_rp - create a return_payment scalar
+*    k_rp = H_n("..rp..", s^ctx_sr, C_a)
+* param: s_sender_receiver - s^ctx_sr
+* param: amount_commitment - C_a
+* outparam: sender_extension_pubkey_out - k_rp
+*/
+void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_receiver,
+    const rct::key &amount_commitment,
+    crypto::secret_key &sender_extension_out);
+/**
+ * brief: make_carrot_return_address - create an F point for a provided output pubkey
+ *    F = (k_rp^-1) k_v Ko
+ * param: s_sender_receiver - s^ctx_sr
+ * param: amount_commitment - C_a
+ * param: onetime_address - Ko
+ * outparam: f_point_out - public key F
+ */
+void make_carrot_return_address(const crypto::hash &s_sender_receiver,
+                                const rct::key &amount_commitment,
+                                const crypto::public_key &onetime_address,
+                                const crypto::secret_key &k_view,
+                                crypto::public_key &f_point_out);
+/**
 * brief: make_carrot_onetime_address_extension_pubkey - create a FCMP++ onetime address extension pubkey
 *    K^o_ext = k^o_g G + k^o_t T
 * param: s_sender_receiver - s^ctx_sr

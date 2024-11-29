@@ -52,6 +52,9 @@ namespace carrot
 // - encrypted amount
 // - encrypted janus anchor
 // - view tag
+// - TX public key
+// - TX input key_image (uniqueness)
+// - Return payment F point
 ///
 struct CarrotEnoteV1 final
 {
@@ -69,6 +72,8 @@ struct CarrotEnoteV1 final
     crypto::x25519_pubkey enote_ephemeral_pubkey;
     /// L_0
     crypto::key_image tx_first_key_image;
+    /// F
+    crypto::public_key F_point;
 };
 
 ////

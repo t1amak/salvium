@@ -159,11 +159,12 @@ TEST(carrot_core, main_address_normal_scan_completeness)
     rct::xmr_amount amount;
     crypto::secret_key amount_blinding_factor;
     get_output_proposal_normal_v1(proposal,
-        tx_first_key_image,
-        enote,
-        encrypted_payment_id,
-        amount,
-        amount_blinding_factor);
+                                  tx_first_key_image,
+                                  keys.k_view,
+                                  enote,
+                                  encrypted_payment_id,
+                                  amount,
+                                  amount_blinding_factor);
 
     ASSERT_EQ(proposal.amount, amount);
     ASSERT_EQ(enote.amount_commitment, rct::commit(amount, rct::sk2rct(amount_blinding_factor)));
@@ -239,11 +240,12 @@ TEST(carrot_core, subaddress_normal_scan_completeness)
     rct::xmr_amount amount;
     crypto::secret_key amount_blinding_factor;
     get_output_proposal_normal_v1(proposal,
-        tx_first_key_image,
-        enote,
-        encrypted_payment_id,
-        amount,
-        amount_blinding_factor);
+                                  tx_first_key_image,
+                                  keys.k_view,
+                                  enote,
+                                  encrypted_payment_id,
+                                  amount,
+                                  amount_blinding_factor);
 
     ASSERT_EQ(proposal.amount, amount);
     ASSERT_EQ(enote.amount_commitment, rct::commit(amount, rct::sk2rct(amount_blinding_factor)));
@@ -327,11 +329,12 @@ TEST(carrot_core, integrated_address_normal_scan_completeness)
     rct::xmr_amount amount;
     crypto::secret_key amount_blinding_factor;
     get_output_proposal_normal_v1(proposal,
-        tx_first_key_image,
-        enote,
-        encrypted_payment_id,
-        amount,
-        amount_blinding_factor);
+                                  tx_first_key_image,
+                                  keys.k_view,
+                                  enote,
+                                  encrypted_payment_id,
+                                  amount,
+                                  amount_blinding_factor);
 
     ASSERT_EQ(proposal.amount, amount);
     ASSERT_EQ(enote.amount_commitment, rct::commit(amount, rct::sk2rct(amount_blinding_factor)));
@@ -763,5 +766,150 @@ TEST(carrot_core, main_address_coinbase_scan_completeness)
         recovered_sender_extension_g,
         recovered_sender_extension_t,
         enote.onetime_address));
+}
+//----------------------------------------------------------------------------------------------------------------------
+TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
+{
+    const mock_carrot_keys alice = mock_carrot_keys::generate();
+    const mock_carrot_keys bob = mock_carrot_keys::generate();
+
+    CarrotDestinationV1 alice_address;
+    make_carrot_main_address_v1(alice.account_spend_pubkey, alice.main_address_view_pubkey, alice_address);
+
+    CarrotDestinationV1 bob_address;
+    make_carrot_main_address_v1(bob.account_spend_pubkey, bob.main_address_view_pubkey, bob_address);
+
+    const CarrotPaymentProposalV1 proposal_out = CarrotPaymentProposalV1{
+        .destination = bob_address,
+        .amount = crypto::rand<rct::xmr_amount>(),
+        .randomness = gen_janus_anchor()
+    };
+
+    const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
+
+    CarrotEnoteV1 enote_out;
+    encrypted_payment_id_t encrypted_payment_id_out;
+    rct::xmr_amount amount_out;
+    crypto::secret_key amount_blinding_factor_out;
+    get_output_proposal_normal_v1(proposal_out,
+                                  tx_first_key_image,
+                                  alice.k_view,
+                                  enote_out,
+                                  encrypted_payment_id_out,
+                                  amount_out,
+                                  amount_blinding_factor_out);
+
+    ASSERT_EQ(proposal_out.amount, amount_out);
+    ASSERT_EQ(enote_out.amount_commitment, rct::commit(amount_out, rct::sk2rct(amount_blinding_factor_out)));
+
+    const CarrotPaymentProposalSelfSendV1 proposal_change = CarrotPaymentProposalSelfSendV1{
+      .destination_address_spend_pubkey = alice.account_spend_pubkey,
+      .amount = crypto::rand<rct::xmr_amount>(),
+      .enote_type = CarrotEnoteType::CHANGE,
+      .enote_ephemeral_pubkey = crypto::x25519_pubkey_gen(),
+    };
+
+    CarrotEnoteV1 enote_change;
+    encrypted_payment_id_t encrypted_payment_id_change;
+    rct::xmr_amount amount_change;
+    crypto::secret_key amount_blinding_factor_change;
+    get_output_proposal_internal_v1(proposal_change,
+                                    alice.s_view_balance,
+                                    tx_first_key_image,
+                                    enote_change,
+                                    amount_change,
+                                    amount_blinding_factor_change);
+
+    ASSERT_EQ(proposal_change.amount, amount_change);
+    ASSERT_EQ(enote_change.amount_commitment, rct::commit(amount_change, rct::sk2rct(amount_blinding_factor_change)));
+
+    crypto::x25519_pubkey s_sender_receiver_unctx;
+    make_carrot_uncontextualized_shared_key_receiver(bob.k_view,
+        enote_out.enote_ephemeral_pubkey,
+        s_sender_receiver_unctx);
+
+    crypto::secret_key recovered_sender_extension_g;
+    crypto::secret_key recovered_sender_extension_t;
+    crypto::public_key recovered_address_spend_pubkey;
+    rct::xmr_amount recovered_amount;
+    crypto::secret_key recovered_amount_blinding_factor;
+    encrypted_payment_id_t recovered_payment_id;
+    CarrotEnoteType recovered_enote_type;
+    const bool scan_success = try_scan_carrot_enote_external(enote_out,
+        encrypted_payment_id_out,
+        s_sender_receiver_unctx,
+        bob.k_view,
+        bob.account_spend_pubkey,
+        recovered_sender_extension_g,
+        recovered_sender_extension_t,
+        recovered_address_spend_pubkey,
+        recovered_amount,
+        recovered_amount_blinding_factor,
+        recovered_payment_id,
+        recovered_enote_type);
+    
+    ASSERT_TRUE(scan_success);
+
+    // check recovered data
+    EXPECT_EQ(proposal_out.destination.address_spend_pubkey, recovered_address_spend_pubkey);
+    EXPECT_EQ(amount_out, recovered_amount);
+    EXPECT_EQ(amount_blinding_factor_out, recovered_amount_blinding_factor);
+    EXPECT_EQ(null_payment_id, recovered_payment_id);
+    EXPECT_EQ(CarrotEnoteType::PAYMENT, recovered_enote_type);
+
+    // check spendability
+    EXPECT_TRUE(can_open_fcmp_onetime_address(bob.k_prove_spend,
+        bob.k_generate_image,
+        rct::rct2sk(rct::I),
+        recovered_sender_extension_g,
+        recovered_sender_extension_t,
+        enote_out.onetime_address));
+
+    // At this point, Bob has successfully received the payment from Alice, and has access to `F` and `K^{change}_o`
+    // It is time to return the payment...
+
+    // Calculate `k_rp`
+    input_context_t input_context_out;
+    make_carrot_input_context(tx_first_key_image, input_context_out);
+    crypto::hash recovered_s_sender_receiver_out;
+    make_carrot_sender_receiver_secret(to_bytes(s_sender_receiver_unctx),
+                                       enote_out.enote_ephemeral_pubkey,
+                                       input_context_out,
+                                       recovered_s_sender_receiver_out);
+    crypto::secret_key recovered_k_rp_out;
+    make_carrot_onetime_address_extension_rp(recovered_s_sender_receiver_out,
+                                             enote_out.amount_commitment,
+                                             recovered_k_rp_out);
+
+    // Multiply by provided F point and d_e (new TX private key) to get the return address
+    rct::key key_return = rct::scalarmultKey(rct::pk2rct(enote_out.F_point), rct::sk2rct(recovered_k_rp_out));
+
+    // Set an arbitrary fee
+    rct::xmr_amount fee = recovered_amount >> 1;
+    
+    const CarrotPaymentProposalReturnV1 proposal_return = CarrotPaymentProposalReturnV1{
+        .destination_address_onetime_pubkey = rct::rct2pk(key_return),
+        .amount = (recovered_amount - fee),
+        .randomness = gen_janus_anchor()
+    };
+
+    const crypto::key_image tx_return_first_key_image = rct::rct2ki(rct::pkGen()); 
+
+    CarrotEnoteV1 enote_return;
+    encrypted_payment_id_t encrypted_payment_id_return;
+    rct::xmr_amount amount_return;
+    crypto::secret_key amount_blinding_factor_return;
+    get_output_proposal_return_v1(proposal_return,
+                                  tx_return_first_key_image,
+                                  bob.k_view,
+                                  enote_return,
+                                  encrypted_payment_id_return,
+                                  amount_return,
+                                  amount_blinding_factor_return);
+
+    ASSERT_EQ(proposal_return.amount, amount_return);
+    ASSERT_EQ(enote_return.amount_commitment, rct::commit(amount_return, rct::sk2rct(amount_blinding_factor_return)));
+
+    
 }
 //----------------------------------------------------------------------------------------------------------------------

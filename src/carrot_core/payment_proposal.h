@@ -63,6 +63,20 @@ struct CarrotPaymentProposalV1 final
 };
 
 ////
+// CarrotPaymentProposalReturnV1
+// - for creating an output proposal to return funds to originator
+///
+struct CarrotPaymentProposalReturnV1 final
+{
+    /// return address (generated from?) F
+    crypto::public_key destination_address_onetime_pubkey;
+    /// a
+    rct::xmr_amount amount;
+    /// anchor_norm: secret 16-byte randomness for Janus anchor
+    janus_anchor_t randomness;
+};
+
+////
 // CarrotPaymentProposalSelfSendV1
 // - for creating an output proposal to send an change to yourself
 ///
@@ -81,6 +95,8 @@ struct CarrotPaymentProposalSelfSendV1 final
 
 /// equality operators
 bool operator==(const CarrotPaymentProposalV1 &a, const CarrotPaymentProposalV1 &b);
+/// equality operators
+bool operator==(const CarrotPaymentProposalReturnV1 &a, const CarrotPaymentProposalReturnV1 &b);
 /// equality operators
 bool operator==(const CarrotPaymentProposalSelfSendV1 &a, const CarrotPaymentProposalSelfSendV1 &b);
 
@@ -117,19 +133,38 @@ void get_protocol_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
 * brief: get_output_proposal_normal_v1 - convert the carrot proposal to an output proposal
 * param: proposal -
 * param: tx_first_key_image -
+* param: priv_view_key -
 * outparam: output_enote_out -
 * outparam: encrypted_payment_id_out - pid_enc
 * outparam: amount_out - used to open commitment C_a
 * outparam: amount_blinding_factor_out - used to open commitment C_a
 */
 void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
-    const crypto::key_image &tx_first_key_image,
-    CarrotEnoteV1 &output_enote_out,
-    encrypted_payment_id_t &encrypted_payment_id_out,
-    rct::xmr_amount &amount_out,
-    crypto::secret_key &amount_blinding_factor_out);
+                                   const crypto::key_image &tx_first_key_image,
+                                   const crypto::secret_key &priv_view_key,
+                                   CarrotEnoteV1 &output_enote_out,
+                                   encrypted_payment_id_t &encrypted_payment_id_out,
+                                   rct::xmr_amount &amount_out,
+                                   crypto::secret_key &amount_blinding_factor_out);
 /**
-* brief: get_output_proposal_v1 - convert the carrot proposal to an output proposal (external selfsend)
+* brief: get_output_proposal_return_v1 - convert the carrot proposal to an output proposal
+* param: proposal -
+* param: tx_first_key_image -
+* param: priv_view_key -
+* outparam: output_enote_out -
+* outparam: encrypted_payment_id_out - pid_enc
+* outparam: amount_out - used to open commitment C_a
+* outparam: amount_blinding_factor_out - used to open commitment C_a
+*/
+void get_output_proposal_return_v1(const CarrotPaymentProposalReturnV1 &proposal,
+                                   const crypto::key_image &tx_first_key_image,
+                                   const crypto::secret_key &priv_view_key,
+                                   CarrotEnoteV1 &output_enote_out,
+                                   encrypted_payment_id_t &encrypted_payment_id_out,
+                                   rct::xmr_amount &amount_out,
+                                   crypto::secret_key &amount_blinding_factor_out);
+/**
+* brief: get_output_proposal_special_v1 - convert the carrot proposal to an output proposal (external selfsend)
 * param: proposal -
 * param: k_view -
 * param: primary_address_spend_pubkey -
