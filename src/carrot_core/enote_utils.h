@@ -181,18 +181,18 @@ void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_recei
     const rct::key &amount_commitment,
     crypto::secret_key &sender_extension_out);
 /**
- * brief: make_carrot_return_address - create an F point for a provided output pubkey
+ * brief: make_carrot_return_address_f_point - create an F point for a provided output pubkey
  *    F = (k_rp^-1) k_v Ko
  * param: s_sender_receiver - s^ctx_sr
  * param: amount_commitment - C_a
  * param: onetime_address - Ko
  * outparam: f_point_out - public key F
  */
-void make_carrot_return_address(const crypto::hash &s_sender_receiver,
-                                const rct::key &amount_commitment,
-                                const crypto::public_key &onetime_address,
-                                const crypto::secret_key &k_view,
-                                crypto::public_key &f_point_out);
+void make_carrot_return_address_f_point(const crypto::hash &s_sender_receiver,
+                                        const rct::key &amount_commitment,
+                                        const crypto::public_key &onetime_address,
+                                        const crypto::secret_key &k_view,
+                                        crypto::public_key &f_point_out);
 /**
 * brief: make_carrot_onetime_address_extension_pubkey - create a FCMP++ onetime address extension pubkey
 *    K^o_ext = k^o_g G + k^o_t T

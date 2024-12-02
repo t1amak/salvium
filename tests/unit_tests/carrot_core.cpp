@@ -779,28 +779,7 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
     CarrotDestinationV1 bob_address;
     make_carrot_main_address_v1(bob.account_spend_pubkey, bob.main_address_view_pubkey, bob_address);
 
-    const CarrotPaymentProposalV1 proposal_out = CarrotPaymentProposalV1{
-        .destination = bob_address,
-        .amount = crypto::rand<rct::xmr_amount>(),
-        .randomness = gen_janus_anchor()
-    };
-
     const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
-
-    CarrotEnoteV1 enote_out;
-    encrypted_payment_id_t encrypted_payment_id_out;
-    rct::xmr_amount amount_out;
-    crypto::secret_key amount_blinding_factor_out;
-    get_output_proposal_normal_v1(proposal_out,
-                                  tx_first_key_image,
-                                  alice.k_view,
-                                  enote_out,
-                                  encrypted_payment_id_out,
-                                  amount_out,
-                                  amount_blinding_factor_out);
-
-    ASSERT_EQ(proposal_out.amount, amount_out);
-    ASSERT_EQ(enote_out.amount_commitment, rct::commit(amount_out, rct::sk2rct(amount_blinding_factor_out)));
 
     const CarrotPaymentProposalSelfSendV1 proposal_change = CarrotPaymentProposalSelfSendV1{
       .destination_address_spend_pubkey = alice.account_spend_pubkey,
@@ -823,11 +802,42 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
     ASSERT_EQ(proposal_change.amount, amount_change);
     ASSERT_EQ(enote_change.amount_commitment, rct::commit(amount_change, rct::sk2rct(amount_blinding_factor_change)));
 
+    const CarrotPaymentProposalV1 proposal_out = CarrotPaymentProposalV1{
+        .destination = bob_address,
+        .change_onetime_address = enote_change.onetime_address,
+        .amount = crypto::rand<rct::xmr_amount>(),
+        .randomness = gen_janus_anchor()
+    };
+
+    CarrotEnoteV1 enote_out;
+    encrypted_payment_id_t encrypted_payment_id_out;
+    rct::xmr_amount amount_out;
+    crypto::secret_key amount_blinding_factor_out;
+    get_output_proposal_normal_v1(proposal_out,
+                                  tx_first_key_image,
+                                  alice.k_view,
+                                  enote_out,
+                                  encrypted_payment_id_out,
+                                  amount_out,
+                                  amount_blinding_factor_out);
+
+    ASSERT_EQ(proposal_out.amount, amount_out);
+    ASSERT_EQ(enote_out.amount_commitment, rct::commit(amount_out, rct::sk2rct(amount_blinding_factor_out)));
+
+    // ...send the enotes (out + change) as part of a TX...
+    
+    // HERE BE DRAGONS!!!
+    // SRCG: At this point, Bob has received a TX containing `enote_out` intended for him,
+    // along with `enote_change` intended for Alice. He now needs to decode the enote to prove it's his.
+    // LAND AHOY!!!
+
+    // 1. calculate s_sr
     crypto::x25519_pubkey s_sender_receiver_unctx;
     make_carrot_uncontextualized_shared_key_receiver(bob.k_view,
         enote_out.enote_ephemeral_pubkey,
         s_sender_receiver_unctx);
 
+    // 2. scan the enote to see if it belongs to Bob
     crypto::secret_key recovered_sender_extension_g;
     crypto::secret_key recovered_sender_extension_t;
     crypto::public_key recovered_address_spend_pubkey;
@@ -868,7 +878,18 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
     // At this point, Bob has successfully received the payment from Alice, and has access to `F` and `K^{change}_o`
     // It is time to return the payment...
 
-    // Calculate `k_rp`
+    // HERE BE DRAGONS!!!
+    // SRCG: this should really be obtaining the key image from the `enote_out` that Bob received...
+    // ...   but I can't be bothered to work out the relevant call for the purposes of this unit test! :)
+    //
+    // simulated KI for "enote_out"
+    const crypto::key_image tx_return_first_key_image = rct::rct2ki(rct::pkGen());
+    // LAND AHOY!!!
+
+    // HERE BE DRAGONS!!!
+    // SRCG: Calculate `k_rp` - note that this MUST use the old value of s_sr, from the TX that Bob received
+    // Failure to do this would not only result in a cyclic dependency of s_sr -> s^ctx_sr -> k_rp <<<
+    // But also simply give Bob the wrong value - it would not be (k_rp * K^change_o)
     input_context_t input_context_out;
     make_carrot_input_context(tx_first_key_image, input_context_out);
     crypto::hash recovered_s_sender_receiver_out;
@@ -880,20 +901,25 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
     make_carrot_onetime_address_extension_rp(recovered_s_sender_receiver_out,
                                              enote_out.amount_commitment,
                                              recovered_k_rp_out);
+    // LAND AHOY!!!
 
-    // Multiply by provided F point and d_e (new TX private key) to get the return address
+    // Multiply by provided F point to get the return address scalar
     rct::key key_return = rct::scalarmultKey(rct::pk2rct(enote_out.F_point), rct::sk2rct(recovered_k_rp_out));
 
-    // Set an arbitrary fee
-    rct::xmr_amount fee = recovered_amount >> 1;
-    
-    const CarrotPaymentProposalReturnV1 proposal_return = CarrotPaymentProposalReturnV1{
-        .destination_address_onetime_pubkey = rct::rct2pk(key_return),
-        .amount = (recovered_amount - fee),
-        .randomness = gen_janus_anchor()
-    };
+    // Sanity check the key_return value is correct by verifying it can be calculated in the expected way by Alice
+    ASSERT_TRUE(key_return == rct::scalarmultKey(rct::pk2rct(enote_change.onetime_address), rct::sk2rct(alice.k_view)));
 
-    const crypto::key_image tx_return_first_key_image = rct::rct2ki(rct::pkGen()); 
+    const rct::xmr_amount fee = recovered_amount >> 4;
+    
+    // Create the return proposal, using the return_address and the amount
+    // key_return = (k_rp * F) = (k_v * K^change_o)
+    // enote_change.onetime_address = K^change_o
+    const CarrotPaymentProposalReturnV1 proposal_return = CarrotPaymentProposalReturnV1{
+      .destination_address_onetime_pubkey = rct::rct2pk(key_return),
+      .change_onetime_address = enote_change.onetime_address,
+      .amount = (recovered_amount - fee),
+      .randomness = gen_janus_anchor()
+    };
 
     CarrotEnoteV1 enote_return;
     encrypted_payment_id_t encrypted_payment_id_return;
@@ -910,6 +936,55 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
     ASSERT_EQ(proposal_return.amount, amount_return);
     ASSERT_EQ(enote_return.amount_commitment, rct::commit(amount_return, rct::sk2rct(amount_blinding_factor_return)));
 
+    // ...send the enote as part of a TX...
     
+    // HERE BE DRAGONS!!!
+    // SRCG: At this point, Alice has received `enote_return`, and must decode it...
+    // ... but all she knows is what's in the enote - she has to work out that it is a return on her own!
+    // LAND AHOY!!!
+    
+    // 1. calculate s_sr
+    crypto::x25519_pubkey s_sender_receiver_unctx_return;
+    make_carrot_uncontextualized_shared_key_receiver(alice.k_view,
+        enote_return.enote_ephemeral_pubkey,
+        s_sender_receiver_unctx_return);
+
+    // 2. scan the enote to see if it belongs to Alice
+    crypto::secret_key recovered_sender_extension_g_return;
+    crypto::secret_key recovered_sender_extension_t_return;
+    crypto::public_key recovered_address_spend_pubkey_return;
+    rct::xmr_amount recovered_amount_return;
+    crypto::secret_key recovered_amount_blinding_factor_return;
+    encrypted_payment_id_t recovered_payment_id_return;
+    CarrotEnoteType recovered_enote_type_return;
+    const bool scan_success_return = try_scan_carrot_enote_external(enote_return,
+        encrypted_payment_id_return,
+        s_sender_receiver_unctx_return,
+        alice.k_view,
+        alice.account_spend_pubkey,
+        recovered_sender_extension_g_return,
+        recovered_sender_extension_t_return,
+        recovered_address_spend_pubkey_return,
+        recovered_amount_return,
+        recovered_amount_blinding_factor_return,
+        recovered_payment_id_return,
+        recovered_enote_type_return);
+    
+    ASSERT_TRUE(scan_success_return);
+
+    // check recovered data
+    EXPECT_EQ(proposal_out.destination.address_spend_pubkey, recovered_address_spend_pubkey);
+    EXPECT_EQ(amount_out, recovered_amount_return + fee);
+    EXPECT_EQ(amount_blinding_factor_return, recovered_amount_blinding_factor_return);
+    EXPECT_EQ(null_payment_id, recovered_payment_id);
+    EXPECT_EQ(CarrotEnoteType::PAYMENT, recovered_enote_type_return);
+
+    // check spendability
+    EXPECT_TRUE(can_open_fcmp_onetime_address(alice.k_prove_spend,
+        alice.k_generate_image,
+        rct::rct2sk(rct::I),
+        recovered_sender_extension_g_return,
+        recovered_sender_extension_t_return,
+        enote_return.onetime_address));
 }
 //----------------------------------------------------------------------------------------------------------------------

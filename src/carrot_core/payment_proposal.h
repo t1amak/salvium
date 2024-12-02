@@ -56,6 +56,8 @@ struct CarrotPaymentProposalV1 final
 {
     /// user address
     CarrotDestinationV1 destination;
+    /// change onetime address from separate enote
+    crypto::public_key change_onetime_address;
     /// b
     rct::xmr_amount amount;
     /// anchor_norm: secret 16-byte randomness for Janus anchor
@@ -70,6 +72,8 @@ struct CarrotPaymentProposalReturnV1 final
 {
     /// return address (generated from?) F
     crypto::public_key destination_address_onetime_pubkey;
+    /// change onetime address from origin TX
+    crypto::public_key change_onetime_address;
     /// a
     rct::xmr_amount amount;
     /// anchor_norm: secret 16-byte randomness for Janus anchor
@@ -107,6 +111,15 @@ bool operator==(const CarrotPaymentProposalSelfSendV1 &a, const CarrotPaymentPro
 * outparam: enote_ephemeral_pubkey_out -
 */
 void get_enote_ephemeral_pubkey(const CarrotPaymentProposalV1 &proposal,
+    const input_context_t &input_context,
+    crypto::x25519_pubkey &enote_ephemeral_pubkey_out);
+/**
+* brief: get_enote_ephemeral_pubkey - get the proposal's enote ephemeral pubkey D_e
+* param: proposal -
+* param: input_context -
+* outparam: enote_ephemeral_pubkey_out -
+*/
+void get_enote_ephemeral_pubkey(const CarrotPaymentProposalReturnV1 &proposal,
     const input_context_t &input_context,
     crypto::x25519_pubkey &enote_ephemeral_pubkey_out);
 /**

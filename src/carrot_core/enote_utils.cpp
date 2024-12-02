@@ -86,7 +86,7 @@ void make_carrot_enote_ephemeral_privkey(const janus_anchor_t &anchor_norm,
     const payment_id_t payment_id,
     crypto::secret_key &enote_ephemeral_privkey_out)
 {
-    // k_e = (H_64(anchor_norm, input_context, K^j_s, K^j_v, pid)) mod l
+    // d_e = (H_64(anchor_norm, input_context, K^j_s, K^j_v, pid)) mod l
     const auto transcript = sp::make_fixed_transcript<CARROT_DOMAIN_SEP_EPHEMERAL_PRIVKEY>(
         anchor_norm, input_context, address_spend_pubkey, address_view_pubkey, payment_id);
     derive_scalar(transcript.data(), transcript.size, nullptr, &enote_ephemeral_privkey_out);
@@ -228,11 +228,11 @@ void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_recei
     derive_scalar(transcript.data(), transcript.size, &s_sender_receiver, &sender_extension_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_carrot_return_address(const crypto::hash &s_sender_receiver,
-                                const rct::key &amount_commitment,
-                                const crypto::public_key &onetime_address,
-                                const crypto::secret_key &k_view,
-                                crypto::public_key &f_point_out)
+void make_carrot_return_address_f_point(const crypto::hash &s_sender_receiver,
+                                        const rct::key &amount_commitment,
+                                        const crypto::public_key &onetime_address,
+                                        const crypto::secret_key &k_view,
+                                        crypto::public_key &f_point_out)
 {
   // Calculate the k_rp value
   crypto::secret_key k_rp;
