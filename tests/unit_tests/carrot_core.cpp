@@ -1,4 +1,5 @@
 // Copyright (c) 2024, The Monero Project
+// Portions Copyright (c) 2024, Salvium (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -41,6 +42,41 @@ using namespace carrot;
 
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
+// https://github.com/jedisct1/libsodium/blob/master/src/libsodium/crypto_scalarmult/curve25519/ref10/x25519_ref10.c#L17
+  static const crypto::x25519_pubkey x25519_small_order_points[7] = {
+      /* 0 (order 4) */
+      {{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }},
+      /* 1 (order 1) */
+      {{ 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }},
+      /* 325606250916557431795983626356110631294008115727848805560023387167927233504
+          (order 8) */
+      {{ 0xe0, 0xeb, 0x7a, 0x7c, 0x3b, 0x41, 0xb8, 0xae, 0x16, 0x56, 0xe3,
+        0xfa, 0xf1, 0x9f, 0xc4, 0x6a, 0xda, 0x09, 0x8d, 0xeb, 0x9c, 0x32,
+        0xb1, 0xfd, 0x86, 0x62, 0x05, 0x16, 0x5f, 0x49, 0xb8, 0x00 }},
+      /* 39382357235489614581723060781553021112529911719440698176882885853963445705823
+          (order 8) */
+      {{ 0x5f, 0x9c, 0x95, 0xbc, 0xa3, 0x50, 0x8c, 0x24, 0xb1, 0xd0, 0xb1,
+        0x55, 0x9c, 0x83, 0xef, 0x5b, 0x04, 0x44, 0x5c, 0xc4, 0x58, 0x1c,
+        0x8e, 0x86, 0xd8, 0x22, 0x4e, 0xdd, 0xd0, 0x9f, 0x11, 0x57 }},
+      /* p-1 (order 2) */
+      {{ 0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f }},
+      /* p (=0, order 4) */
+      {{ 0xed, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f }},
+      /* p+1 (=1, order 1) */
+      {{ 0xee, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f }}
+  };
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 struct mock_carrot_keys
 {
     crypto::secret_key s_master;
@@ -81,7 +117,7 @@ static bool can_open_fcmp_onetime_address(const crypto::secret_key &k_prove_spen
     // K_s = k_gi G + k_ps T
     // K^j_s = k^j_subscal * K_s
     // Ko = K^j_s + k^o_g G + k^o_t T
-    //    = (k^o_g + k^j_subscal * k_gi) + (k^o_t + k^j_subscal * k_ps)
+    //    = (k^o_g + k^j_subscal * k_gi) G + (k^o_t + k^j_subscal * k_ps) T
 
     // combined_g = k^o_g + k^j_subscal * k_gi
     rct::key combined_g;
@@ -138,6 +174,40 @@ TEST(carrot_core, ECDH_subaddress_completeness)
 
     EXPECT_EQ(s_sr_sender, s_sr_receiver);
 }
+//----------------------------------------------------------------------------------------------------------------------
+TEST(carrot_core, ECDH_mx25519_convergence)
+{
+    const crypto::x25519_pubkey P = crypto::x25519_pubkey_gen();
+    const crypto::x25519_secret_key a = crypto::x25519_secret_key_gen();
+    const crypto::x25519_secret_key eight = crypto::x25519_scalar{{8}};
+
+    // do Q = 8 * a * P using mx25519
+    crypto::x25519_pubkey Q_mx25519;
+    crypto::x25519_scmul_key(eight, P, Q_mx25519);
+    crypto::x25519_scmul_key(a, Q_mx25519, Q_mx25519);
+
+    // do Q = 8 * a * P using make_carrot_uncontextualized_shared_key_receiver()
+    crypto::secret_key a_sk;
+    memcpy(a_sk.data, a.data, sizeof(a_sk));
+    crypto::x25519_pubkey Q_carrot;
+    ASSERT_TRUE(make_carrot_uncontextualized_shared_key_receiver(a_sk, P, Q_carrot));
+
+    // check equal
+    EXPECT_EQ(Q_mx25519, Q_carrot);
+}
+//----------------------------------------------------------------------------------------------------------------------
+/*
+TEST(carrot_core, ECDH_catch_small_order_points)
+{
+    const crypto::secret_key sk = rct::rct2sk(rct::skGen());
+
+    for (const crypto::x25519_pubkey &P : x25519_small_order_points)
+    {
+        crypto::x25519_pubkey Q;
+        EXPECT_FALSE(make_carrot_uncontextualized_shared_key_receiver(sk, P, Q));
+    }
+}
+*/
 //----------------------------------------------------------------------------------------------------------------------
 TEST(carrot_core, main_address_normal_scan_completeness)
 {
@@ -787,7 +857,7 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
       .enote_type = CarrotEnoteType::CHANGE,
       .enote_ephemeral_pubkey = crypto::x25519_pubkey_gen(),
     };
-
+    
     CarrotEnoteV1 enote_change;
     encrypted_payment_id_t encrypted_payment_id_change;
     rct::xmr_amount amount_change;
@@ -801,7 +871,7 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
 
     ASSERT_EQ(proposal_change.amount, amount_change);
     ASSERT_EQ(enote_change.amount_commitment, rct::commit(amount_change, rct::sk2rct(amount_blinding_factor_change)));
-
+    
     const CarrotPaymentProposalV1 proposal_out = CarrotPaymentProposalV1{
         .destination = bob_address,
         .change_onetime_address = enote_change.onetime_address,
@@ -820,12 +890,50 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
                                   encrypted_payment_id_out,
                                   amount_out,
                                   amount_blinding_factor_out);
-
+    
     ASSERT_EQ(proposal_out.amount, amount_out);
     ASSERT_EQ(enote_out.amount_commitment, rct::commit(amount_out, rct::sk2rct(amount_blinding_factor_out)));
 
     // ...send the enotes (out + change) as part of a TX...
+    std::vector<CarrotEnoteV1> tx_enotes{enote_out, enote_change};
+    //make_tx_from_enotes(tx_enotes, ...);
     
+    // HERE BE DRAGONS!!!
+    // SRCG: At this point, Alice has received a TX containing `enote_change` intended for her,
+    // along with `enote_out` intended for Bob. She now needs to decode the enote to prove it's hers.
+    // LAND AHOY!!!
+
+    crypto::secret_key recovered_sender_extension_g_change;
+    crypto::secret_key recovered_sender_extension_t_change;
+    crypto::public_key recovered_address_spend_pubkey_change;
+    rct::xmr_amount recovered_amount_change;
+    crypto::secret_key recovered_amount_blinding_factor_change;
+    CarrotEnoteType recovered_enote_type_change;
+    const bool scan_success_change = try_scan_carrot_enote_internal(enote_change,
+                                                                    alice.s_view_balance,
+                                                                    recovered_sender_extension_g_change,
+                                                                    recovered_sender_extension_t_change,
+                                                                    recovered_address_spend_pubkey_change,
+                                                                    recovered_amount_change,
+                                                                    recovered_amount_blinding_factor_change,
+                                                                    recovered_enote_type_change);
+    
+    ASSERT_TRUE(scan_success_change);
+    
+    // check recovered data
+    EXPECT_EQ(proposal_change.destination_address_spend_pubkey, recovered_address_spend_pubkey_change);
+    EXPECT_EQ(amount_change, recovered_amount_change);
+    EXPECT_EQ(amount_blinding_factor_change, recovered_amount_blinding_factor_change);
+    EXPECT_EQ(proposal_change.enote_type, recovered_enote_type_change);
+    
+    // check spendability
+    EXPECT_TRUE(can_open_fcmp_onetime_address(alice.k_prove_spend,
+                                              alice.k_generate_image,
+                                              rct::rct2sk(rct::I),
+                                              recovered_sender_extension_g_change,
+                                              recovered_sender_extension_t_change,
+                                              enote_change.onetime_address));
+
     // HERE BE DRAGONS!!!
     // SRCG: At this point, Bob has received a TX containing `enote_out` intended for him,
     // along with `enote_change` intended for Alice. He now needs to decode the enote to prove it's his.
@@ -874,7 +982,7 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
         recovered_sender_extension_g,
         recovered_sender_extension_t,
         enote_out.onetime_address));
-
+    
     // At this point, Bob has successfully received the payment from Alice, and has access to `F` and `K^{change}_o`
     // It is time to return the payment...
 
@@ -902,14 +1010,15 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
                                              enote_out.amount_commitment,
                                              recovered_k_rp_out);
     // LAND AHOY!!!
-
+    
     // Multiply by provided F point to get the return address scalar
     rct::key key_return = rct::scalarmultKey(rct::pk2rct(enote_out.F_point), rct::sk2rct(recovered_k_rp_out));
 
     // Sanity check the key_return value is correct by verifying it can be calculated in the expected way by Alice
     ASSERT_TRUE(key_return == rct::scalarmultKey(rct::pk2rct(enote_change.onetime_address), rct::sk2rct(alice.k_view)));
 
-    const rct::xmr_amount fee = recovered_amount >> 4;
+    // Create a TX fee that needs to be deducted from the returned amount
+    const rct::xmr_amount txnFee = recovered_amount >> 4;
     
     // Create the return proposal, using the return_address and the amount
     // key_return = (k_rp * F) = (k_v * K^change_o)
@@ -917,10 +1026,10 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
     const CarrotPaymentProposalReturnV1 proposal_return = CarrotPaymentProposalReturnV1{
       .destination_address_onetime_pubkey = rct::rct2pk(key_return),
       .change_onetime_address = enote_change.onetime_address,
-      .amount = (recovered_amount - fee),
+      .amount = (recovered_amount - txnFee),
       .randomness = gen_janus_anchor()
     };
-
+    
     CarrotEnoteV1 enote_return;
     encrypted_payment_id_t encrypted_payment_id_return;
     rct::xmr_amount amount_return;
@@ -948,7 +1057,7 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
     make_carrot_uncontextualized_shared_key_receiver(alice.k_view,
         enote_return.enote_ephemeral_pubkey,
         s_sender_receiver_unctx_return);
-
+    
     // 2. scan the enote to see if it belongs to Alice
     crypto::secret_key recovered_sender_extension_g_return;
     crypto::secret_key recovered_sender_extension_t_return;
@@ -971,20 +1080,24 @@ TEST(carrot_core, main_address_return_payment_normal_scan_completeness)
         recovered_enote_type_return);
     
     ASSERT_TRUE(scan_success_return);
-
+    
     // check recovered data
-    EXPECT_EQ(proposal_out.destination.address_spend_pubkey, recovered_address_spend_pubkey);
-    EXPECT_EQ(amount_out, recovered_amount_return + fee);
+    EXPECT_EQ(enote_change.onetime_address, recovered_address_spend_pubkey_return);
+    EXPECT_EQ(amount_out, recovered_amount_return + txnFee); // returned minus the deducted TX fee
     EXPECT_EQ(amount_blinding_factor_return, recovered_amount_blinding_factor_return);
-    EXPECT_EQ(null_payment_id, recovered_payment_id);
+    EXPECT_EQ(null_payment_id, recovered_payment_id_return);
     EXPECT_EQ(CarrotEnoteType::PAYMENT, recovered_enote_type_return);
 
-    // check spendability
+    // check spendability of the return_payment
+    rct::key combined_extension_g;
+    sc_add(combined_extension_g.bytes, to_bytes(recovered_sender_extension_g_change), to_bytes(recovered_sender_extension_g_return));
+    rct::key combined_extension_t;
+    sc_add(combined_extension_t.bytes, to_bytes(recovered_sender_extension_t_change), to_bytes(recovered_sender_extension_t_return));
     EXPECT_TRUE(can_open_fcmp_onetime_address(alice.k_prove_spend,
-        alice.k_generate_image,
-        rct::rct2sk(rct::I),
-        recovered_sender_extension_g_return,
-        recovered_sender_extension_t_return,
-        enote_return.onetime_address));
+                                              alice.k_generate_image,
+                                              rct::rct2sk(rct::I),
+                                              rct::rct2sk(combined_extension_g),
+                                              rct::rct2sk(combined_extension_t),
+                                              enote_return.onetime_address));
 }
 //----------------------------------------------------------------------------------------------------------------------
