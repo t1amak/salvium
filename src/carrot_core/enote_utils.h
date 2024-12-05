@@ -1,5 +1,4 @@
 // Copyright (c) 2024, The Monero Project
-// Portions Copyright (c) 2024, Salvium (author: SRCG)
 // 
 // All rights reserved.
 // 
@@ -170,29 +169,16 @@ void make_carrot_onetime_address_extension_g(const crypto::hash &s_sender_receiv
 void make_carrot_onetime_address_extension_t(const crypto::hash &s_sender_receiver,
     const rct::key &amount_commitment,
     crypto::secret_key &sender_extension_out);
-/**
-* brief: make_carrot_onetime_address_extension_rp - create a return_payment scalar
-*    k_rp = H_n("..rp..", s^ctx_sr, C_a)
-* param: s_sender_receiver - s^ctx_sr
-* param: amount_commitment - C_a
-* outparam: sender_extension_pubkey_out - k_rp
-*/
+ /**
+-* brief: make_carrot_onetime_address_extension_rp - create a return_payment scalar
+-*    k_rp = H_n("..rp..", s^ctx_sr, C_a)
+-* param: s_sender_receiver - s^ctx_sr
+-* param: amount_commitment - C_a
+-* outparam: sender_extension_pubkey_out - k_rp
+-*/
 void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_receiver,
     const rct::key &amount_commitment,
     crypto::secret_key &sender_extension_out);
-/**
- * brief: make_carrot_return_address_f_point - create an F point for a provided output pubkey
- *    F = (k_rp^-1) k_v Ko
- * param: s_sender_receiver - s^ctx_sr
- * param: amount_commitment - C_a
- * param: onetime_address - Ko
- * outparam: f_point_out - public key F
- */
-void make_carrot_return_address_f_point(const crypto::hash &s_sender_receiver,
-                                        const rct::key &amount_commitment,
-                                        const crypto::public_key &onetime_address,
-                                        const crypto::secret_key &k_view,
-                                        crypto::public_key &f_point_out);
 /**
 * brief: make_carrot_onetime_address_extension_pubkey - create a FCMP++ onetime address extension pubkey
 *    K^o_ext = k^o_g G + k^o_t T
@@ -395,7 +381,7 @@ bool try_get_carrot_amount(const crypto::hash &s_sender_receiver,
     rct::xmr_amount &amount_out,
     crypto::secret_key &amount_blinding_factor_out);
 /**
- * brief: verify_external_carrot_janus_protection - check normal external enote is Janus safe (i.e. can recompute D_e)
+ * brief: verify_carrot_external_janus_protection - check normal external enote is Janus safe (i.e. can recompute D_e)
  * param: nominal_anchor - anchor'
  * param: input_context -
  * param: nominal_address_spend_pubkey - K^j_s'
@@ -405,67 +391,11 @@ bool try_get_carrot_amount(const crypto::hash &s_sender_receiver,
  * param: enote_ephemeral_pubkey - D_e
  * return: true if this normal external enote is safe from Janus attacks
  */
-bool verify_external_carrot_janus_protection(const janus_anchor_t &nominal_anchor,
+bool verify_carrot_external_janus_protection(const janus_anchor_t &nominal_anchor,
     const input_context_t &input_context,
     const crypto::public_key &nominal_address_spend_pubkey,
     const crypto::public_key &nominal_address_view_pubkey,
     const bool is_subaddress,
     const payment_id_t nominal_payment_id,
     const crypto::x25519_pubkey &enote_ephemeral_pubkey);
-/**
- * brief: verify_external_carrot_janus_protection_receiver - check normal external enote is Janus safe (i.e. can
- *                                                  recompute D_e), and perhaps set nominal pid to null
- * param: nominal_anchor - anchor'
- * param: input_context -
- * param: nominal_address_spend_pubkey - K^j_s'
- * param: account_spend_pubkey - K_s
- * param: k_view - k_v
- * param: enote_ephemeral_pubkey - D_e
- * outparam: nominal_payment_id_inout - pid', first tries recomputing D_e with pid', then sets to null and tries again
- * return: true if this normal external enote is safe from Janus attacks
- */
-bool verify_external_carrot_janus_protection_receiver(const janus_anchor_t &nominal_anchor,
-    const input_context_t &input_context,
-    const crypto::public_key &nominal_address_spend_pubkey,
-    const crypto::public_key &account_spend_pubkey,
-    const crypto::secret_key &k_view,
-    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
-    payment_id_t &nominal_payment_id_inout);
-/**
- * brief: verify_special_carrot_janus_protection - check special enote is Janus safe (i.e. can recompute anchor_sp)
- * param: enote_ephemeral_pubkey - D_e
- * param: input_context -
- * param: onetime_address - Ko
- * param: k_view - k_v
- * param: account_spend_pubkey - K_s
- * param: nominal_anchor - anchor'
- * return: true if this special enote is safe from Janus attacks
- */
-bool verify_special_carrot_janus_protection(const crypto::x25519_pubkey &enote_ephemeral_pubkey,
-    const input_context_t &input_context,
-    const crypto::public_key &onetime_address,
-    const crypto::secret_key &k_view,
-    const crypto::public_key &account_spend_pubkey,
-    const janus_anchor_t &nominal_anchor);
-/**
- * brief: verify_carrot_janus_protection - check whether a received Carrot enote is Janus protected (all paths)
- * param: input_context -
- * param: onetime_address - Ko
- * param: k_view - k_v
- * param: account_spend_pubkey - K_s
- * param: nominal_address_spend_pubkey - K^j_s'
- * param: enote_ephemeral_pubkey - D_e
- * param: nominal_anchor - anchor'
- * outparam: nominal_payment_id_inout - pass possible pid, set to null if the sender didn't explicitly bind to that pid
- * return: true if this received enote is safe from Janus attacks
- */
-bool verify_carrot_janus_protection(const input_context_t &input_context,
-    const crypto::public_key &onetime_address,
-    const crypto::secret_key &k_view,
-    const crypto::public_key &account_spend_pubkey,
-    const crypto::public_key &nominal_address_spend_pubkey,
-    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
-    const janus_anchor_t &nominal_anchor,
-    payment_id_t &nominal_payment_id_inout);
-
 } //namespace carrot

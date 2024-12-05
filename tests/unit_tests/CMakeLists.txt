@@ -40,6 +40,7 @@ set(unit_tests_sources
   canonical_amounts.cpp
   carrot.cpp
   carrot_core.cpp
+  carrot_legacy.cpp
   carrot_transcript_fixed.cpp
   chacha.cpp
   checkpoints.cpp

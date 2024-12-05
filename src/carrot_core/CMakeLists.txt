@@ -32,10 +32,11 @@ set(carrot_core_sources
   carrot_enote_scan.cpp
   core_types.cpp
   destination.cpp
+  device_ram_borrowed.cpp
   enote_utils.cpp
   hash_functions.cpp
-  payment_proposal.cpp
-  return_address.cpp)
+  output_set_finalization.cpp
+  payment_proposal.cpp)
 
 monero_find_all_headers(carrot_core_headers, "${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -48,7 +49,6 @@ target_link_libraries(carrot_core
     cncrypto
     epee
     ringct
-    ringct_basic
     seraphis_crypto
   PRIVATE
     ${EXTRA_LIBRARIES})

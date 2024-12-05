@@ -1,4 +1,4 @@
-// Copyright (c) 2022, The Monero Project
+// Copyright (c) 2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -91,40 +91,5 @@ void make_carrot_address_spend_pubkey(const crypto::public_key &spend_pubkey,
     const std::uint32_t j_major,
     const std::uint32_t j_minor,
     crypto::public_key &address_spend_pubkey_out);
-
-/**
-* brief: make_carrot_address_view_pubkey - K^j_v
-*   K^j_v = k_v K^j_s
-* param: spend_pubkey - K_s = k_gi G + k_ps U
-* param: s_generate_address - s_ga
-* param: j_major -
-* param: j_minor -
-* param: k_view - k_v
-* outparam: address_view_pubkey_out - K^j_v
-*/
-void make_carrot_address_view_pubkey(const crypto::public_key &spend_pubkey,
-    const crypto::secret_key &s_generate_address,
-    const std::uint32_t j_major,
-    const std::uint32_t j_minor,
-    const crypto::secret_key &k_view,
-    crypto::public_key &address_view_pubkey_out);
-
-/**
-* brief: make_carrot_address - (K^j_s, K^j_v)
-*   K^j_s = k^j_subscal * K_s
-*   K^j_v = k_v K^j_s
-* param: spend_pubkey - K_s = k_gi G + k_ps U
-* param: s_generate_address - s_ga
-* param: j_major -
-* param: j_minor -
-* param: k_view - k_v
-* outparam: address_pubkeys_out - (K^j_s, K^j_v)
-*/
-void make_carrot_address(const crypto::public_key &spend_pubkey,
-    const crypto::secret_key &s_generate_address,
-    const std::uint32_t j_major,
-    const std::uint32_t j_minor,
-    const crypto::secret_key &k_view,
-    std::pair<crypto::public_key, crypto::public_key> &address_pubkeys_out);
 
 } //namespace carrot
