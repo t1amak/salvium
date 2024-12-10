@@ -79,47 +79,56 @@ namespace carrot {
   // Function to generate the zero-knowledge proof
   void make_carrot_spend_authority_proof(const rct::key &x, const rct::key &y, const rct::key &K_o, carrot::spend_authority_proof &proof_out) {
   
-    // Step 1: Generate random scalars r1 and r2
-    rct::key r1 = rct::skGen(); // Random scalar for G commitment
-    rct::key r2 = rct::skGen(); // Random scalar for T commitment
+    // Step 1: Generate random scalars r_x and r_y
+    rct::key r_x = rct::skGen(); // Random scalar for G commitment
+    rct::key r_y = rct::skGen(); // Random scalar for T commitment
     
-    // Step 2: Calculate commitments
-    rct::key commitment_G = rct::scalarmultBase(r1); // r1 * G
-    rct::key commitment_T = rct::scalarmultKey(r2, rct::pk2rct(crypto::get_T())); // r2 * T (using T generator)
+    // Step 2: Calculate commitment by summing terms for G and T
+    rct::key commitment;
+    rct::key commitment_G = rct::scalarmultBase(r_x); // r_x * G
+    rct::key commitment_T = rct::scalarmultKey(rct::pk2rct(crypto::get_T()), r_y); // r_y * T (using T generator)
+    commitment = rct::addKeys(commitment_G, commitment_T); // R = r_xG + r_yT
     
     // Step 3: Calculate the challenge scalar
-    std::vector<rct::key> keys{commitment_G, commitment_T, K_o};
-    rct::key challenge = rct::hash_to_scalar(keys);
+    std::vector<rct::key> keys{commitment, K_o};
+    rct::key challenge = rct::hash_to_scalar(keys); // c = H(R || K_o)
     
     // Step 4: Calculate responses
-    rct::key response_x = rct::addKeys(r1, rct::scalarmultKey(challenge, x)); // z1 = r1 + c * x
-    rct::key response_y = rct::addKeys(r2, rct::scalarmultKey(challenge, y)); // z2 = r2 + c * y
-    
+    rct::key response_x;
+    sc_muladd(response_x.bytes, challenge.bytes, x.bytes, r_x.bytes); // z_x = r_x + c * x
+    sc_reduce32(response_x.bytes);
+    rct::key response_y;
+    sc_muladd(response_y.bytes, challenge.bytes, y.bytes, r_y.bytes); // z_y = r_y + c * y
+    sc_reduce32(response_y.bytes);
+
     // Step 5: Construct and return the proof
-    proof_out.commitment_G = commitment_G;
-    proof_out.commitment_T = commitment_T;
-    proof_out.challenge = challenge;
+    proof_out.commitment = commitment;
     proof_out.response_x = response_x;
     proof_out.response_y = response_y;
+
+    // Step 6: Sanity checks
+    rct::key resC = rct::addKeys(commitment, rct::scalarmultKey(K_o, challenge));    
+    rct::key resZ = rct::addKeys(rct::scalarmultBase(response_x), rct::scalarmultKey(rct::pk2rct(crypto::get_T()), response_y));
+    if (!rct::equalKeys(resZ, resC)) assert(false);
   }
   
   // Function to verify the zero-knowledge proof
-  static bool verify_carrot_spend_authority_proof(const carrot::spend_authority_proof &proof, const rct::key &K_o) {
+  bool verify_carrot_spend_authority_proof(const carrot::spend_authority_proof &proof, const rct::key &K_o) {
     
     // Step 1: calculate the challenge
-    std::vector<rct::key> keys{proof.commitment_G, proof.commitment_T, K_o};
+    std::vector<rct::key> keys{proof.commitment, K_o};
     rct::key recomputed_challenge = rct::hash_to_scalar(keys);
     
-    // Step 2: Calculate z1G + z2T - cP
-    rct::key z1G = rct::scalarmultBase(proof.response_x); // z1 * G
-    rct::key z2T = rct::scalarmultKey(proof.response_y, rct::pk2rct(crypto::get_T())); // z2 * T
-    rct::key cP  = rct::scalarmultKey(recomputed_challenge, K_o); // cP
-    rct::key result = rct::addKeys(z1G, z2T); // z1G + z2T
-    rct::subKeys(result, result, cP); // z1G + z2T - cP
+    // Step 2: Calculate z_xG + x_yT
+    rct::key z_xG  = rct::scalarmultBase(proof.response_x); // z1 * G
+    rct::key x_yT  = rct::scalarmultKey(rct::pk2rct(crypto::get_T()), proof.response_y); // z2 * T
+    rct::key resZ = rct::addKeys(z_xG, x_yT); // z_xG + x_yT
+
+    // Step 3: Calculate R + cK_o
+    rct::key resC = rct::addKeys(proof.commitment, rct::scalarmultKey(K_o, recomputed_challenge)); // R + cK_o
     
-    // Step 3: verify result ?= commitment_G + commitment_T
-    rct::key sum_commitments = rct::addKeys(proof.commitment_G, proof.commitment_T);
-    return rct::equalKeys(result, sum_commitments);
+    // Step 4: verify z_xG + x_yT ?= R + cK_o
+    return rct::equalKeys(resZ, resC);
   }
 
 } // namespace carrot

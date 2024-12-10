@@ -42,11 +42,9 @@ namespace carrot
   // Proof to show spend authority in zero knowledge
   // Define the proof structure
   struct spend_authority_proof {
-    rct::key commitment_G;  // Commitment to x (G component)
-    rct::key commitment_T;  // Commitment to y (T component)
-    rct::key challenge;     // Challenge scalar (c)
-    rct::key response_x;    // Response for x (z1)
-    rct::key response_y;    // Response for y (z2)
+    rct::key commitment;  // Commitment
+    rct::key response_x;    // Response for x (z_x)
+    rct::key response_y;    // Response for y (z_y)
   };
 
   /**
@@ -64,6 +62,6 @@ namespace carrot
    * param: K_o - output key to verify the spend authority proof for
    * return: true if proof is valid, false otherwise
    */
-  static bool verify_carrot_spend_authority_proof(const spend_authority_proof &proof, const rct::key &K_o);
+  bool verify_carrot_spend_authority_proof(const spend_authority_proof &proof, const rct::key &K_o);
 
 } //namespace carrot

@@ -74,8 +74,12 @@ bool get_return_address_f_point(const crypto::hash &s_sender_receiver,
     rct::key key_inv_rp = rct::invert(rct::sk2rct(k_rp));
   
     // Calculate the F point value (F = (k_rp^-1) k_v K_o)
-    crypto::public_key key_temp = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(onetime_address), key_inv_rp));
-    return k_view_dev.view_key_scalar_mult_ed25519(key_temp, f_point_out);
+    //crypto::public_key key_temp = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(onetime_address), key_inv_rp));
+    //return k_view_dev.view_key_scalar_mult_ed25519(key_temp, f_point_out);
+
+    // Calculate the F point value (F = (k_rp^-1) H(k_v K_o))
+    crypto::public_key key_temp = k_view_dev.view_key_scalar_mult_ed25519(onetime_address, f_point_out);
+    crypto::public_key key_hash = rct::rct2pk(rct::cn_fast_hash(key_temp));
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------

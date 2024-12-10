@@ -41,6 +41,7 @@ set(unit_tests_sources
   carrot.cpp
   carrot_core.cpp
   carrot_legacy.cpp
+  carrot_sparc.cpp
   carrot_transcript_fixed.cpp
   chacha.cpp
   checkpoints.cpp
