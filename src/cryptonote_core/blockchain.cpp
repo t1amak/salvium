@@ -2753,7 +2753,11 @@ void Blockchain::get_output_key_mask_unlocked(const uint64_t& amount, const uint
 //------------------------------------------------------------------
 bool Blockchain::get_output_distribution(uint64_t amount, std::string asset_type, uint64_t from_height, uint64_t to_height, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &base, uint64_t &num_spendable_global_outs) const
 {
-  start_height = 0;
+  // rct outputs don't exist before v4
+  if (amount == 0 && m_nettype != network_type::FAKECHAIN)
+    start_height = m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_DYNAMIC_FEE);
+  else
+    start_height = 0;
   base = 0;
   num_spendable_global_outs = 0;
 
