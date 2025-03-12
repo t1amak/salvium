@@ -22,8 +22,7 @@ $(package)_toolset_$(host_os)=gcc
 $(package)_archiver_$(host_os)=$($(package)_ar)
 $(package)_toolset_darwin=darwin
 $(package)_archiver_darwin=$($(package)_libtool)
-$(package)_config_libraries_$(host_os)="chrono,filesystem,program_options,system,thread,test,date_time,regex,serialization"
-$(package)_config_libraries_mingw32="chrono,filesystem,program_options,system,thread,test,date_time,regex,serialization,locale"
+$(package)_config_libraries=chrono,filesystem,program_options,system,thread,test,date_time,regex,serialization,locale
 $(package)_cxxflags=-std=c++11
 $(package)_cxxflags_linux=-fPIC
 $(package)_cxxflags_freebsd=-fPIC -DBOOST_ASIO_HAS_STD_STRING_VIEW=1
@@ -36,7 +35,7 @@ define $(package)_preprocess_cmds
 endef
 
 define $(package)_config_cmds
-  ./bootstrap.sh --without-icu --with-libraries=$(boost_config_libraries_$(host_os))
+  ./bootstrap.sh --without-icu --with-libraries=$(boost_config_libraries)
 endef
 
 define $(package)_build_cmds
