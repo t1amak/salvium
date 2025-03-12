@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2023, The Monero Project
+# Copyright (c) 2014-2022, The Monero Project
 #
 # All rights reserved.
 #
@@ -37,9 +37,6 @@ include(CheckCXXCompilerFlag)
 include(CheckLinkerFlag)
 include(CheckLibraryExists)
 include(CheckFunctionExists)
-if (POLICY CMP0148)
-    cmake_policy(SET CMP0148 OLD) # https://cmake.org/cmake/help/latest/policy/CMP0148.html
-endif()
 include(FindPythonInterp)
 
 if (IOS)
@@ -222,7 +219,7 @@ function(forbid_undefined_symbols)
     file(MAKE_DIRECTORY "${TEST_PROJECT}")
     file(WRITE "${TEST_PROJECT}/CMakeLists.txt"
       [=[
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.1)
 project(test)
 option(EXPECT_SUCCESS "" ON)
 file(WRITE "${CMAKE_SOURCE_DIR}/incorrect_source.cpp" "void undefined_symbol(); void symbol() { undefined_symbol(); }")
@@ -415,7 +412,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 else()
   set(DEFAULT_BUILD_DEBUG_UTILITIES OFF)
 endif()
-option(BUILD_DEBUG_UTILITIES "Build debug utilities." ${DEFAULT_BUILD_DEBUG_UTILITIES})
+option(BUILD_DEBUG_UTILITIES "Build debug utilities." DEFAULT_BUILD_DEBUG_UTILITIES)
 
 if(OSSFUZZ)
   message(STATUS "Using OSS-Fuzz fuzzing system")
@@ -452,11 +449,14 @@ endif()
 # Check if we're on OpenBSD. See the README.md for build instructions.
 if(CMAKE_SYSTEM_NAME MATCHES "kOpenBSD.*|OpenBSD.*")
   set(OPENBSD TRUE)
-elseif(CMAKE_SYSTEM_NAME MATCHES "kNetBSD.*|NetBSD.*")
-  set(NETBSD TRUE)
-elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
-  set(BSDI TRUE)
 endif()
+
+# TODO: check bsdi, NetBSD, to see if they need the same FreeBSD changes
+#
+# elseif(CMAKE_SYSTEM_NAME MATCHES "kNetBSD.*|NetBSD.*")
+#   set(NETBSD TRUE)
+# elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
+#   set(BSDI TRUE)
 
 include_directories(external/rapidjson/include external/easylogging++ src contrib/epee/include external external/supercop/include)
 
@@ -531,14 +531,14 @@ add_definitions("-DBLOCKCHAIN_DB=${BLOCKCHAIN_DB}")
 # Can't install hook in static build on OSX, because OSX linker does not support --wrap
 # On ARM, having libunwind package (with .so's only) installed breaks static link.
 # When possible, avoid stack tracing using libunwind in favor of using easylogging++.
-if (APPLE OR NETBSD)
+if (APPLE)
   set(DEFAULT_STACK_TRACE OFF)
   set(LIBUNWIND_LIBRARIES "")
 elseif (DEPENDS AND NOT LINUX)
   set(DEFAULT_STACK_TRACE OFF)
   set(LIBUNWIND_LIBRARIES "")
 elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND NOT MINGW)
-  set(DEFAULT_STACK_TRACE OFF)
+  set(DEFAULT_STACK_TRACE ON)
   set(STACK_TRACE_LIB "easylogging++") # for diag output only
   set(LIBUNWIND_LIBRARIES "")
 elseif (ARM)
@@ -547,7 +547,7 @@ elseif (ARM)
 else()
   find_package(Libunwind)
   if(LIBUNWIND_FOUND)
-    set(DEFAULT_STACK_TRACE OFF)
+    set(DEFAULT_STACK_TRACE ON)
     set(STACK_TRACE_LIB "libunwind") # for diag output only
   else()
     set(DEFAULT_STACK_TRACE OFF)
@@ -1004,9 +1004,6 @@ else()
 
   if(APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=default -DGTEST_HAS_TR1_TUPLE=0")
-    if(ARM)
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-aligned-allocation")
-    endif()
   endif()
 
   set(DEBUG_FLAGS "-g3")
@@ -1137,8 +1134,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "(SunOS|Solaris)")
   set(EXTRA_LIBRARIES socket nsl resolv)
 elseif(NOT MSVC AND NOT DEPENDS)
   find_library(RT rt)
-  find_library(Z z)
-  set(EXTRA_LIBRARIES ${RT} ${Z})
+  set(EXTRA_LIBRARIES ${RT})
 endif()
 
 list(APPEND EXTRA_LIBRARIES ${CMAKE_DL_LIBS})
@@ -1146,7 +1142,7 @@ list(APPEND EXTRA_LIBRARIES ${CMAKE_DL_LIBS})
 if (HIDAPI_FOUND OR LibUSB_COMPILE_TEST_PASSED)
   if (APPLE)
     if(DEPENDS)
-      list(APPEND EXTRA_LIBRARIES "-framework Foundation -framework AppKit -framework IOKit -framework Security")
+      list(APPEND EXTRA_LIBRARIES "-framework Foundation -framework AppKit -framework IOKit")
     else()
       find_library(COREFOUNDATION CoreFoundation)
       find_library(APPKIT AppKit)
@@ -1161,9 +1157,7 @@ if (HIDAPI_FOUND OR LibUSB_COMPILE_TEST_PASSED)
   endif()
 endif()
 
-if(NOT OPENBSD)
-  option(USE_READLINE "Build with GNU readline support." ON)
-endif()
+option(USE_READLINE "Build with GNU readline support." ON)
 if(USE_READLINE AND NOT DEPENDS)
   find_package(Readline)
   if(READLINE_FOUND AND GNU_READLINE_FOUND)
