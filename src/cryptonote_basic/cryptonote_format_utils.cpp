@@ -110,7 +110,7 @@ namespace cryptonote
   uint64_t get_transaction_weight_clawback(const transaction &tx, size_t n_padded_outputs)
   {
     const rct::rctSig &rv = tx.rct_signatures;
-    const bool plus = rv.type == rct::RCTTypeBulletproofPlus;
+    const bool plus = (rv.type == rct::RCTTypeBulletproofPlus || rv.type == rct::RCTTypeFullProofs);
     const uint64_t bp_base = (32 * ((plus ? 6 : 9) + 7 * 2)) / 2; // notional size of a 2 output proof, normalized to 1 proof (ie, divided by 2)
     const size_t n_outputs = tx.vout.size();
     if (n_padded_outputs <= 2)
@@ -290,7 +290,7 @@ namespace cryptonote
     return is_v1_tx(blobdata_ref{tx_blob.data(), tx_blob.size()});
   }
   //---------------------------------------------------------------
-  bool generate_key_image_helper(const account_keys& ack, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::public_key& tx_public_key, const std::vector<crypto::public_key>& additional_tx_public_keys, size_t real_output_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const bool use_origin_data, const origin_data& od)
+  bool generate_key_image_helper(const account_keys& ack, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const crypto::public_key& out_key, const crypto::public_key& tx_public_key, const std::vector<crypto::public_key>& additional_tx_public_keys, size_t real_output_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const bool use_origin_data, const origin_data& od, rct::salvium_input_data_t& sid)
   {
     crypto::key_derivation recv_derivation = AUTO_VAL_INIT(recv_derivation);
     bool r = hwdev.generate_key_derivation(tx_public_key, ack.m_view_secret_key, recv_derivation);
@@ -317,11 +317,13 @@ namespace cryptonote
 
     boost::optional<subaddress_receive_info> subaddr_recv_info = is_out_to_acc_precomp(subaddresses, out_key, recv_derivation, additional_recv_derivations, real_output_index,hwdev);
     CHECK_AND_ASSERT_MES(subaddr_recv_info, false, "key image helper: given output pubkey doesn't seem to belong to this address");
-
-    return generate_key_image_helper_precomp(ack, out_key, subaddr_recv_info->derivation, real_output_index, subaddr_recv_info->index, in_ephemeral, ki, hwdev, use_origin_data, od);
+    
+    sid.aR = subaddr_recv_info->derivation;
+    sid.i  = real_output_index;
+    return generate_key_image_helper_precomp(ack, out_key, subaddr_recv_info->derivation, real_output_index, subaddr_recv_info->index, in_ephemeral, ki, hwdev, use_origin_data, od, sid);
   }
   //---------------------------------------------------------------
-  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const bool use_origin_data, const origin_data& od)
+  bool generate_key_image_helper_precomp(const account_keys& ack, const crypto::public_key& out_key, const crypto::key_derivation& recv_derivation, size_t real_output_index, const subaddress_index& received_index, keypair& in_ephemeral, crypto::key_image& ki, hw::device &hwdev, const bool use_origin_data, const origin_data& od, rct::salvium_input_data_t& sid)
   {
     if (hwdev.compute_key_image(ack, out_key, recv_derivation, real_output_index, received_index, in_ephemeral, ki))
     {
@@ -400,7 +402,7 @@ namespace cryptonote
           // SRCG: This is a confusing one - for some reason I was using the line below, and it _seemed_ to work...
           // ... but I think it was luck! the "od.output_index" would only work for the TD_ORIGIN data, of course...
           //hwdev.derive_subaddress_public_key(out_key, recv_derivation, od.output_index, P_change);
-          if (od.tx_type == cryptonote::transaction_type::CONVERT || od.tx_type == cryptonote::transaction_type::STAKE) {
+          if (od.tx_type == cryptonote::transaction_type::CONVERT || od.tx_type == cryptonote::transaction_type::STAKE || od.tx_type == cryptonote::transaction_type::AUDIT) {
             hwdev.derive_subaddress_public_key(out_key, recv_derivation, 0, P_change);
           } else {
             hwdev.derive_subaddress_public_key(out_key, recv_derivation, real_output_index, P_change);
@@ -415,13 +417,20 @@ namespace cryptonote
           crypto::secret_key sk_spend = crypto::null_skey;
           CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(derivation_P_change_tx, od.output_index, spend_skey, sk_spend), false, "Failed to derive secret key for P_change");
 
+          // 3.5 Handle subaddresses
+          if (!received_index.is_zero()) {
+            crypto::secret_key scalar_step3;
+            hwdev.sc_secret_add(scalar_step3, sk_spend, subaddr_sk);
+            sk_spend = scalar_step3;
+          }
+          
           // 4. Derive the public key from the secret key for verification purposes
           crypto::public_key change_pk;
           CHECK_AND_ASSERT_MES(hwdev.secret_key_to_public_key(sk_spend, change_pk), false, "Failed to derive public key for P_change");
           CHECK_AND_ASSERT_MES(P_change == change_pk, false, "derived P_change public key does not match P_change");
 
           // 5. Calculate the secret spend key "x_return"
-          if (od.tx_type == cryptonote::transaction_type::CONVERT || od.tx_type == cryptonote::transaction_type::STAKE) {
+          if (od.tx_type == cryptonote::transaction_type::CONVERT || od.tx_type == cryptonote::transaction_type::STAKE || od.tx_type == cryptonote::transaction_type::AUDIT) {
             CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, 0, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
           } else {
             CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(recv_derivation, real_output_index, sk_spend, scalar_step1), false, "Failed to derive one-time output secret key 'x_return'");
@@ -433,7 +442,11 @@ namespace cryptonote
 
           // 6. Create the key_image needed to be able to spend the output
           hwdev.generate_key_image(in_ephemeral.pub, in_ephemeral.sec, ki);
-        
+
+          // Update the SID to have the correct derivation for P_change as well
+          sid.aR_stake = derivation_P_change_tx;
+          sid.i_stake = od.output_index;
+          
           return true;
 
         } else {
@@ -517,7 +530,7 @@ namespace cryptonote
   {
     CHECK_AND_ASSERT_MES(tx.pruned, std::numeric_limits<uint64_t>::max(), "get_pruned_transaction_weight does not support non pruned txes");
     CHECK_AND_ASSERT_MES(tx.version >= 2, std::numeric_limits<uint64_t>::max(), "get_pruned_transaction_weight does not support v1 txes");
-    CHECK_AND_ASSERT_MES(tx.rct_signatures.type == rct::RCTTypeBulletproof2 || tx.rct_signatures.type == rct::RCTTypeCLSAG || tx.rct_signatures.type == rct::RCTTypeBulletproofPlus,
+    CHECK_AND_ASSERT_MES(tx.rct_signatures.type == rct::RCTTypeBulletproof2 || tx.rct_signatures.type == rct::RCTTypeCLSAG || tx.rct_signatures.type == rct::RCTTypeBulletproofPlus || tx.rct_signatures.type == rct::RCTTypeFullProofs,
         std::numeric_limits<uint64_t>::max(), "Unsupported rct_signatures type in get_pruned_transaction_weight");
     CHECK_AND_ASSERT_MES(!tx.vin.empty(), std::numeric_limits<uint64_t>::max(), "empty vin");
     CHECK_AND_ASSERT_MES(tx.vin[0].type() == typeid(cryptonote::txin_to_key), std::numeric_limits<uint64_t>::max(), "empty vin");
@@ -967,8 +980,8 @@ namespace cryptonote
     switch (asset_type_id) {
     case 0x53414C00:
       return "SAL";
-    case 0x56534400:
-      return "VSD";
+    case 0x53414C31:
+      return "SAL1";
     case 0x4255524E:
       return "BURN";
     case 0x00000000:
@@ -984,8 +997,8 @@ namespace cryptonote
   {
     if (asset_type == "SAL") {
       return 0x53414C00;
-    } else if (asset_type == "VSD") {
-      return 0x56534400;
+    } else if (asset_type == "SAL1") {
+      return 0x53414C31;
     } else if (asset_type == "BURN") {
       return 0x4255524E;
     } else if (asset_type == "") {
@@ -1147,6 +1160,8 @@ namespace cryptonote
       output_public_key = boost::get< txout_to_key >(out.target).key;
     else if (out.target.type() == typeid(txout_to_tagged_key))
       output_public_key = boost::get< txout_to_tagged_key >(out.target).key;
+    else if (out.target.type() == typeid(txout_to_carrot_key))
+      output_public_key = boost::get< txout_to_carrot_key >(out.target).key;
     else
     {
       LOG_ERROR("Unexpected output target type found: " << out.target.type().name());
@@ -1171,6 +1186,8 @@ namespace cryptonote
       output_asset_type = boost::get< txout_to_key>(out.target).asset_type;
     else if (out.target.type() == typeid(txout_to_tagged_key))
       output_asset_type = boost::get< txout_to_tagged_key >(out.target).asset_type;
+    else if (out.target.type() == typeid(txout_to_carrot_key))
+      output_asset_type = boost::get< txout_to_carrot_key >(out.target).asset_type;
     else
     {
       LOG_ERROR("Unexpected output target type found: " << out.target.type().name() << " - cannot retrieve output_asset_type");
@@ -1188,6 +1205,8 @@ namespace cryptonote
       output_unlock_time = boost::get< txout_to_key>(out.target).unlock_time;
     else if (out.target.type() == typeid(txout_to_tagged_key))
       output_unlock_time = boost::get< txout_to_tagged_key >(out.target).unlock_time;
+    else if (out.target.type() == typeid(txout_to_carrot_key))
+      output_unlock_time = boost::get< txout_to_carrot_key >(out.target).unlock_time;
     else
     {
       LOG_ERROR("Unexpected output target type found: " << out.target.type().name() << " - cannot retrieve output_unlock_time");
@@ -1230,37 +1249,58 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool check_output_types(const transaction& tx, const uint8_t hf_version)
   {
+    if (tx.type == cryptonote::transaction_type::AUDIT || tx.type == cryptonote::transaction_type::STAKE) {
+      CHECK_AND_ASSERT_MES(tx.vout.size() == 1, false, "audit and stake transactions should have 1 output");
+    }
+    
     for (const auto &o: tx.vout)
     {
       if (hf_version > HF_VERSION_REQUIRE_VIEW_TAGS)
       {
         // from v15, require outputs have view tags
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+          << o.target.type().name() << ", expected txout_to_tagged_key in transaction");
       }
       else if (hf_version < HF_VERSION_VIEW_TAGS)
       {
         // require outputs to be of type txout_to_key
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_key in transaction id=" << get_transaction_hash(tx));
+          << o.target.type().name() << ", expected txout_to_key in transaction");
       }
       else  //(hf_version == HF_VERSION_VIEW_TAGS || hf_version == HF_VERSION_VIEW_TAGS+1)
       {
         // require outputs be of type txout_to_key OR txout_to_tagged_key
         // to allow grace period before requiring all to be txout_to_tagged_key
         CHECK_AND_ASSERT_MES(o.target.type() == typeid(txout_to_key) || o.target.type() == typeid(txout_to_tagged_key), false, "wrong variant type: "
-          << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key in transaction id=" << get_transaction_hash(tx));
+          << o.target.type().name() << ", expected txout_to_key or txout_to_tagged_key in transaction");
 
         // require all outputs in a tx be of the same type
         CHECK_AND_ASSERT_MES(o.target.type() == tx.vout[0].target.type(), false, "non-matching variant types: "
           << o.target.type().name() << " and " << tx.vout[0].target.type().name() << ", "
-          << "expected matching variant types in transaction id=" << get_transaction_hash(tx));
+          << "expected matching variant types in transaction");
       }
 
       // Verify the asset type
       std::string asset_type;
       CHECK_AND_ASSERT_MES(cryptonote::get_output_asset_type(o, asset_type), false, "failed to get asset type");
-      CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+      if (hf_version < HF_VERSION_SALVIUM_ONE_PROOFS) {
+        // Prior to the first audit, ONLY SAL was supported
+        CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+      } else {
+        if (tx.type == cryptonote::transaction_type::AUDIT) {
+          // HERE BE DRAGONS!!!
+          // SRCG: This will NOT always be the case - when we add an audit for SALx it'll need to support that as well
+          // The CHANGE for an AUDIT TX must be SAL (and 0 value, and unspendable, and to the origin wallet, and ...)
+          CHECK_AND_ASSERT_MES(asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+          // LAND AHOY!!!
+        } else if (tx.type == cryptonote::transaction_type::PROTOCOL) {
+          // PROTOCOL TXs are responsible for paying out SAL and SAL1 during the AUDIT
+          CHECK_AND_ASSERT_MES(asset_type == "SAL1" || asset_type == "SAL", false, "wrong output asset type:" << asset_type);
+        } else {
+          // All other TX types must only spend + create SAL1 (MINER, TRANSFER)
+          CHECK_AND_ASSERT_MES(asset_type == "SAL1", false, "wrong output asset type:" << asset_type);
+        }
+      }
     }
     return true;
   }
@@ -1338,15 +1378,13 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(output_index < additional_derivations.size(), boost::none, "wrong number of additional derivations");
       if (out_can_be_to_acc(view_tag_opt, additional_derivations[output_index], output_index, &hwdev))
       {
-        // HERE BE DRAGONS!!!
         // SRCG: This is NOT going to work for PROTOCOL_TX except where there is only a single output
         CHECK_AND_ASSERT_MES(hwdev.derive_subaddress_public_key(out_key, additional_derivations[output_index], output_index, subaddress_spendkey), boost::none, "Failed to derive subaddress public key");
-        // LAND AHOY!!!
         auto found = subaddresses.find(subaddress_spendkey);
         if (found != subaddresses.end())
           return subaddress_receive_info{ found->second, additional_derivations[output_index] };
 
-        // If we get here, odds are that it is a PROTOCOL_TX (rare for other TX types to have additional derivations!)
+        // If we get here, odds are that it is a PROTOCOL_TX
         if (output_index != 0) {
           // Try the derivation with a 0 index as an override - CONVERT / YIELD TXs cannot know their index in the PROTOCOL_TX, so they use 0 in all cases
           CHECK_AND_ASSERT_MES(hwdev.derive_subaddress_public_key(out_key, additional_derivations[output_index], 0, subaddress_spendkey), boost::none, "Failed to derive subaddress public key");

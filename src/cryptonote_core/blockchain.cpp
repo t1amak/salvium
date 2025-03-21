@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <boost/asio/dispatch.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 #include <boost/format.hpp>
@@ -154,12 +155,13 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
   // outputs list.  that is to say that absolute offset #2 is absolute offset
   // #1 plus relative offset #2.
   // TODO: Investigate if this is necessary / why this is done.
-  std::vector<uint64_t> absolute_offsets = relative_output_offsets_to_absolute(tx_in_to_key.key_offsets);
-  //std::vector<uint64_t> absolute_offsets;
-  //m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets);
+  std::vector<uint64_t> asset_offsets = relative_output_offsets_to_absolute(tx_in_to_key.key_offsets);
+  std::vector<uint64_t> absolute_offsets;
+  m_db->get_output_id_from_asset_type_output_index(tx_in_to_key.asset_type, asset_offsets, absolute_offsets);
   std::vector<output_data_t> outputs;
 
   bool found = false;
+  /*
   auto it = m_scan_table.find(tx_prefix_hash);
   if (it != m_scan_table.end())
   {
@@ -170,6 +172,7 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
       found = true;
     }
   }
+  */
 
   if (!found)
   {
@@ -232,7 +235,7 @@ bool Blockchain::scan_outputkeys_for_indexes(size_t tx_version, const txin_to_ke
           output_index = m_db->get_output_key(tx_in_to_key.amount, i);
 
         // call to the passed boost visitor to grab the public key for the output
-        if (!vis.handle_output(output_index.unlock_time, tx_in_to_key.asset_type, output_index.pubkey, output_index.commitment))
+        if (!vis.handle_output(output_index.unlock_time, cryptonote::asset_type_from_id(output_index.asset_type), output_index.pubkey, output_index.commitment))
         {
           MERROR_VER("Failed to handle_output for output no = " << count << ", with absolute offset " << i);
           return false;
@@ -375,9 +378,9 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
 
   // create general purpose async service queue
 
-  m_async_work_idle = std::unique_ptr < boost::asio::io_service::work > (new boost::asio::io_service::work(m_async_service));
+  m_async_work_idle = std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(m_async_service.get_executor());
   // we only need 1
-  m_async_pool.create_thread(boost::bind(&boost::asio::io_service::run, &m_async_service));
+  m_async_pool.create_thread(boost::bind(&boost::asio::io_context::run, &m_async_service));
 
 #if defined(PER_BLOCK_CHECKPOINT)
   if (m_nettype != FAKECHAIN)
@@ -851,20 +854,12 @@ bool Blockchain::get_block_by_hash(const crypto::hash &h, block &blk, bool *orph
 // less blocks than desired if there aren't enough.
 difficulty_type Blockchain::get_difficulty_for_next_block()
 {
-  LOG_PRINT_L3("Blockchain::" << __func__);
-
-  std::stringstream ss;
-  bool print = false;
-
-  int done = 0;
-  ss << "get_difficulty_for_next_block: height " << m_db->height() << std::endl;
   if (m_fixed_difficulty)
   {
     return m_db->height() ? m_fixed_difficulty : 1;
   }
 
-start:
-  difficulty_type D = 0;
+  LOG_PRINT_L3("Blockchain::" << __func__);
 
   crypto::hash top_hash = get_tail_id();
   {
@@ -873,12 +868,8 @@ start:
     // something a bit out of date, but that's fine since anything which
     // requires the blockchain lock will have acquired it in the first place,
     // and it will be unlocked only when called from the getinfo RPC
-    ss << "Locked, tail id " << top_hash << ", cached is " << m_difficulty_for_next_block_top_hash << std::endl;
     if (top_hash == m_difficulty_for_next_block_top_hash)
-    {
-      ss << "Same, using cached diff " << m_difficulty_for_next_block << std::endl;
-      D = m_difficulty_for_next_block;
-    }
+      return m_difficulty_for_next_block;
   }
 
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
@@ -896,16 +887,11 @@ start:
     difficulty_blocks_count = DIFFICULTY_BLOCKS_COUNT_V2;
   }
 
-  if (!(new_top_hash == top_hash)) D=0;
-  ss << "Re-locked, height " << height << ", tail id " << new_top_hash << (new_top_hash == top_hash ? "" : " (different)") << std::endl;
-  top_hash = new_top_hash;
-
   // ND: Speedup
   // 1. Keep a list of the last 735 (or less) blocks that is used to compute difficulty,
   //    then when the next block difficulty is queried, push the latest height data and
   //    pop the oldest one from the list. This only requires 1x read per height instead
   //    of doing 735 (DIFFICULTY_BLOCKS_COUNT).
-  bool check = false;
   if (m_reset_timestamps_and_difficulties_height)
     m_timestamps_and_difficulties_height = 0;
   if (m_timestamps_and_difficulties_height != 0 && ((height - m_timestamps_and_difficulties_height) == 1) && m_timestamps.size() >= difficulty_blocks_count)
@@ -922,12 +908,8 @@ start:
     m_timestamps_and_difficulties_height = height;
     timestamps = m_timestamps;
     difficulties = m_difficulties;
-    check = true;
   }
-  //else
-  std::vector<uint64_t> timestamps_from_cache = timestamps;
-  std::vector<difficulty_type> difficulties_from_cache = difficulties;
-
+  else
   {
     uint64_t offset = height - std::min <uint64_t> (height, static_cast<uint64_t>(difficulty_blocks_count));
     if (offset == 0)
@@ -940,40 +922,16 @@ start:
       timestamps.reserve(height - offset);
       difficulties.reserve(height - offset);
     }
-    ss << "Looking up " << (height - offset) << " from " << offset << std::endl;
     for (; offset < height; offset++)
     {
       timestamps.push_back(m_db->get_block_timestamp(offset));
       difficulties.push_back(m_db->get_block_cumulative_difficulty(offset));
     }
 
-    if (check) if (timestamps != timestamps_from_cache || difficulties !=difficulties_from_cache)
-    {
-      ss << "Inconsistency XXX:" << std::endl;
-      ss << "top hash: "<<top_hash << std::endl;
-      ss << "timestamps: " << timestamps_from_cache.size() << " from cache, but " << timestamps.size() << " without" << std::endl;
-      ss << "difficulties: " << difficulties_from_cache.size() << " from cache, but " << difficulties.size() << " without" << std::endl;
-      ss << "timestamps_from_cache:" << std::endl; for (const auto &v :timestamps_from_cache) ss << "  " << v << std::endl;
-      ss << "timestamps:" << std::endl; for (const auto &v :timestamps) ss << "  " << v << std::endl;
-      ss << "difficulties_from_cache:" << std::endl; for (const auto &v :difficulties_from_cache) ss << "  " << v << std::endl;
-      ss << "difficulties:" << std::endl; for (const auto &v :difficulties) ss << "  " << v << std::endl;
-
-      uint64_t dbh = m_db->height();
-      uint64_t sh = dbh < 10000 ? 0 : dbh - 10000;
-      ss << "History from -10k at :" << dbh << ", from " << sh << std::endl;
-      for (uint64_t h = sh; h < dbh; ++h)
-      {
-        uint64_t ts = m_db->get_block_timestamp(h);
-        difficulty_type d = m_db->get_block_cumulative_difficulty(h);
-        ss << "  " << h << " " << ts << " " << d << std::endl;
-      }
-      print = true;
-    }
     m_timestamps_and_difficulties_height = height;
     m_timestamps = timestamps;
     m_difficulties = difficulties;
   }
-
   size_t target = get_difficulty_target();
   difficulty_type diff;
   if (version == 1) {
@@ -985,28 +943,6 @@ start:
   CRITICAL_REGION_LOCAL1(m_difficulty_lock);
   m_difficulty_for_next_block_top_hash = top_hash;
   m_difficulty_for_next_block = diff;
-  if (D && D != diff)
-  {
-    ss << "XXX Mismatch at " << height << "/" << top_hash << "/" << get_tail_id() << ": cached " << D << ", real " << diff << std::endl;
-    print = true;
-  }
-
-  ++done;
-  if (done == 1 && D && D != diff)
-  {
-    print = true;
-    ss << "Might be a race. Let's see what happens if we try again..." << std::endl;
-    epee::misc_utils::sleep_no_w(100);
-    goto start;
-  }
-  ss << "Diff for " << top_hash << ": " << diff << std::endl;
-  if (print)
-  {
-    MGINFO("START DUMP");
-    MGINFO(ss.str());
-    MGINFO("END DUMP");
-    MGINFO("Please send moneromooo on Libera.Chat the contents of this log, from a couple dozen lines before START DUMP to END DUMP");
-  }
   return diff;
 }
 //------------------------------------------------------------------
@@ -1033,13 +969,27 @@ size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_heig
   LOG_PRINT_L3("Blockchain::" << __func__);
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
 
-  const uint64_t start_height = start_height_opt ? *start_height_opt : check_difficulty_checkpoints().second;
+  //uint64_t start_height = start_height_opt ? *start_height_opt : check_difficulty_checkpoints().second;
+  uint8_t version = get_current_hard_fork_version();
+  uint64_t start_height = 0;
+  if (start_height_opt) {
+    start_height = *start_height_opt;
+  } else {
+    bool found = false;
+    for (size_t i=0; i<num_mainnet_hard_forks; ++i) {
+      if (version == mainnet_hard_forks[i].version) {
+        start_height = mainnet_hard_forks[i].height;
+        found = true;
+        break;
+      }
+    }
+    start_height = std::max(start_height, check_difficulty_checkpoints().second);
+  }
   const uint64_t top_height = m_db->height() - 1;
   MGINFO("Recalculating difficulties from height " << start_height << " to height " << top_height);
 
   std::vector<uint64_t> timestamps;
   std::vector<difficulty_type> difficulties;
-  uint8_t version = get_current_hard_fork_version();
   size_t difficulty_blocks_count;
   if (version == 1) {
     difficulty_blocks_count = DIFFICULTY_BLOCKS_COUNT;
@@ -1233,12 +1183,7 @@ bool Blockchain::switch_to_alternative_blockchain(std::list<block_extended_info>
       // just the latter (because the rollback was done above).
       rollback_blockchain_switching(disconnected_chain, split_height);
 
-      // FIXME: Why do we keep invalid blocks around?  Possibly in case we hear
-      // about them again so we can immediately dismiss them, but needs some
-      // looking into.
       const crypto::hash blkid = cryptonote::get_block_hash(bei.bl);
-      add_block_as_invalid(bei, blkid);
-      MERROR("The block was inserted as invalid while connecting new alternative chain, block_id: " << blkid);
       m_db->remove_alt_block(blkid);
       alt_ch_iter++;
 
@@ -1246,7 +1191,6 @@ bool Blockchain::switch_to_alternative_blockchain(std::list<block_extended_info>
       {
         const auto &bei = *alt_ch_to_orph_iter++;
         const crypto::hash blkid = cryptonote::get_block_hash(bei.bl);
-        add_block_as_invalid(bei, blkid);
         m_db->remove_alt_block(blkid);
       }
       return false;
@@ -1435,9 +1379,11 @@ bool Blockchain::prevalidate_miner_transaction(const block& b, uint64_t height, 
 bool Blockchain::prevalidate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  if (!b.protocol_tx.vin.size()) {
-    // Nothing is created by this TX - check no money is included
-    CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "void protocol transaction in the block has outputs");
+  if (height == 0) {
+    // Genesis block exception
+    CHECK_AND_ASSERT_MES(b.protocol_tx.version == 1, false, "Invalid genesis protocol transaction version");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 0, false, "genesis protocol transaction in the block has inputs");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "genesis protocol transaction in the block has outputs");
     return true;
   }
   CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 1, false, "coinbase protocol transaction in the block has no inputs");
@@ -1482,10 +1428,19 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
   switch (version) {
   case HF_VERSION_BULLETPROOF_PLUS:
   case HF_VERSION_ENABLE_N_OUTS:
+  case HF_VERSION_FULL_PROOFS:
+  case HF_VERSION_ENFORCE_FULL_PROOFS:
+  case HF_VERSION_SHUTDOWN_USER_TXS:
+  case HF_VERSION_SALVIUM_ONE_PROOFS:
+  case HF_VERSION_AUDIT1_PAUSE:
+  case HF_VERSION_AUDIT2:
+  case HF_VERSION_AUDIT2_PAUSE:
     if (b.miner_tx.amount_burnt > 0) {
       CHECK_AND_ASSERT_MES(money_in_use + b.miner_tx.amount_burnt > money_in_use, false, "miner transaction is overflowed by amount_burnt");
       money_in_use += b.miner_tx.amount_burnt;
     }
+    if (already_generated_coins != 0)
+      CHECK_AND_ASSERT_MES(money_in_use / 5 == b.miner_tx.amount_burnt, false, "miner_transaction has incorrect amount_burnt amount");
     break;
   default:
     assert(false);
@@ -1512,173 +1467,106 @@ bool Blockchain::validate_miner_transaction(const block& b, size_t cumulative_bl
 }
 //------------------------------------------------------------------
 // SRCG
-bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, std::vector<std::pair<transaction, blobdata>>& txs, uint8_t hf_version)
+bool Blockchain::validate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
-  CHECK_AND_ASSERT_MES(b.tx_hashes.size() == txs.size(), false, "Invalid number of TXs / hashes supplied");
 
-  if (!b.protocol_tx.vin.size()) {
-    // Nothing is created by this TX - check no money is included
-    CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "void protocol transaction in the block has outputs");
+  if (height == 0) {
+    // Genesis block exception
+    CHECK_AND_ASSERT_MES(b.protocol_tx.version == 1, false, "Invalid genesis protocol transaction version");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 0, false, "genesis protocol transaction in the block has inputs");
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "genesis protocol transaction in the block has outputs");
     return true;
   }
-
-  if (!b.protocol_tx.vout.size()) {
-    // No money is minted, nothing to verify - bail out
-    return true;
-  }
-
-  // Get the circulating supply so we can verify 
-  std::map<std::string, uint64_t> circ_supply;
-  if (hf_version >= HF_VERSION_ENABLE_CONVERT) {
-    circ_supply = get_db().get_circulating_supply();
-  }
   
-  // Build a map of outputs from the protocol_tx
-  std::map<crypto::public_key, std::tuple<std::string, uint64_t, uint64_t>> outputs;
-  for (auto& o : b.protocol_tx.vout) {
-    if (o.target.type() == typeid(txout_to_key)) {
-      txout_to_key out = boost::get<txout_to_key>(o.target);
-      CHECK_AND_ASSERT_MES(out.unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid unlock time on protocol_tx output");
-      outputs[out.key] = std::make_tuple(out.asset_type, o.amount, out.unlock_time);
-    } else if (o.target.type() == typeid(txout_to_tagged_key)) {
-      txout_to_tagged_key out = boost::get<txout_to_tagged_key>(o.target);
-      CHECK_AND_ASSERT_MES(out.unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid unlock time on protocol_tx output");
-      outputs[out.key] = std::make_tuple(out.asset_type, o.amount, out.unlock_time);
-    } else {
-      MERROR("Block at height: " << height << " attempting to add protocol transaction with invalid type " << o.target.type().name());
-      return false;
-    }
-  }
-
-  // Maintain a count of outputs that we have verified
-  std::vector<crypto::public_key> outputs_verified;
-  
-  size_t tx_index = 0;
-  // Iterate over the block's transaction hashes, grabbing each
-  // from the tx_pool and validating them.
-  for (const auto& tx_tmp : txs)
-  {
-    // Get a ptr to the TX to simplify coding
-    const transaction* tx = &tx_tmp.first;
-    
-    // Check to see if the TX exists in the DB - this probably duplicates the effort in our caller, but better to be sure
-    if (m_db->tx_exists(tx->hash))
-    {
-      MERROR("Block at height: " << height << " attempting to add transaction already in blockchain with id: " << tx->hash);
-      return false;
-    }
-
-    if (hf_version >= HF_VERSION_ENABLE_CONVERT) {
-      
-      // Check to see if the TX is a conversion or not
-      if (tx->type != cryptonote::transaction_type::CONVERT) {
-        // Only conversion (and failed conversion, aka refund) TXs need to be verified - skip this TX
-        continue;
-      }
-
-      // Verify that the TX has an output in the protocol_tx to verify
-      if (outputs.count(tx->return_address) != 1) {
-        LOG_ERROR("Block at height: " << height << " - Failed to locate output for conversion TX id " << tx->hash << " - rejecting block");
-        return false;
-      }
-
-      // Get the output information
-      std::string output_asset_type;
-      uint64_t output_amount;
-      uint64_t output_unlock_time;
-      std::tie(output_asset_type, output_amount, output_unlock_time) = outputs[tx->return_address];
-
-      // Verify the asset_type
-      if (tx->source_asset_type == output_asset_type) {
-        // Check the amount for REFUND
-        if (tx->amount_burnt != output_amount) {
-          LOG_ERROR("Block at height: " << height << " - Output amount does not match amount_burnt for refunded TX id " << tx->hash << " - rejecting block");
-          return false;
-        }
-
-        // Verified the refund successfully
-        outputs_verified.push_back(tx->return_address);
-        
-      } else if (tx->destination_asset_type == output_asset_type) {
-        // Check the amount for CONVERT
-
-        // Verify the amount of the conversion
-        uint64_t amount_minted_check = 0, amount_slippage_check = 0;
-        bool ok = cryptonote::calculate_conversion(tx->source_asset_type, tx->destination_asset_type, tx->amount_burnt, tx->amount_slippage_limit, amount_minted_check, amount_slippage_check, circ_supply, b.pricing_record, hf_version);
-        if (!ok) {
-          LOG_ERROR("Block at height: " << height << " - Failed to calculate conversion for TX id " << tx->hash << " - rejecting block");
-          return false;
-        }
-        if (amount_minted_check != output_amount) {
-          LOG_ERROR("Block at height: " << height << " - Output amount does not match amount minted for converted TX id " << tx->hash << " - rejecting block");
-          return false;
-        }
-
-        // Verified the conversion successfully
-        outputs_verified.push_back(tx->return_address);
-        
-      } else {
-        LOG_ERROR("Block at height: " << height << " - Output asset type incorrect: source " << tx->source_asset_type << ", dest " << tx->destination_asset_type << ", got " << output_asset_type << " - rejecting block");
-        return false;
-      }
-    }
-  }
-
+  // if nothing is created by this TX - check no money is included
+  CHECK_AND_ASSERT_MES(b.protocol_tx.vin.size() == 1, false, "coinbase protocol transaction in the block has no inputs");
+   
   // Can we have matured STAKE transactions yet?
   uint64_t stake_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
-  if (height > stake_lock_period) {
+  if (height <= stake_lock_period) {
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == 0, false, "protocol transaction in the block has outputs");
+    return true;
+  }
 
-    // Yes - Get the staking data for the block that matured this time
-    cryptonote::yield_block_info ybi_matured;
-    uint64_t matured_height = height - stake_lock_period - 1;
-    bool ok = get_ybi_entry(matured_height, ybi_matured);
-    if (ok && ybi_matured.locked_coins_this_block > 0) {
-      
-      // Iterate over the cached data for block yield, calculating the yield payouts due
-      std::vector<std::pair<yield_tx_info, uint64_t>> yield_payouts;
-      if (!calculate_yield_payouts(matured_height, yield_payouts)) {
-        LOG_ERROR("Block at height: " << height << " - Failed to obtain yield payout information - aborting");
-        return false;
-      }
-
-      // Iterate the yield payouts, verifying as we go
-      for (const auto& payout: yield_payouts) {
-
-        // Do we have a singular matching output in tx.vout?
-        if (outputs.count(payout.first.return_address) != 1) {
-          LOG_ERROR("Block at height: " << height << " - Failed to locate output for matured TX id " << payout.first.tx_hash << " - rejecting block");
-          return false;
-        }
-        
-        // Get the output information
-        std::string output_asset_type;
-        uint64_t output_amount;
-        uint64_t output_unlock_time;
-        std::tie(output_asset_type, output_amount, output_unlock_time) = outputs[payout.first.return_address];
-
-        // Verify the asset type - must be SAL
-        if (output_asset_type != "SAL") {
-          LOG_ERROR("Block at height: " << height << " - Incorrect output asset type for matured TX id " << payout.first.tx_hash << " - rejecting block");
-          return false;
-        }
-
-        // Verify the amount
-        if (output_amount != payout.second) {
-          LOG_ERROR("Block at height: " << height << " - Incorrect output amount for matured TX id " << payout.first.tx_hash << " - rejecting block");
-          return false;
-        }
-
-        // Amount and return_address match our expectation
-        outputs_verified.push_back(payout.first.return_address);        
-      }
+  // Get the staking data for the block that matured this time
+  cryptonote::yield_block_info ybi_matured;
+  std::vector<std::pair<yield_tx_info, uint64_t>> yield_payouts;
+  uint64_t matured_height = height - stake_lock_period - 1;
+  bool ok = get_ybi_entry(matured_height, ybi_matured);
+  if (!ok) {
+    LOG_ERROR("Block at height: " << height << " - Failed to obtain yield block information - aborting");
+    return false;
+  } else if (ybi_matured.locked_coins_this_block == 0) {
+    LOG_PRINT_L1("Block at height: " << height << " - no yield payouts due - skipping");
+  } else {
+    // Iterate over the cached data for block yield, calculating the yield payouts due  
+    if (!calculate_yield_payouts(matured_height, yield_payouts)) {
+      LOG_ERROR("Block at height: " << height << " - Failed to obtain yield payout information - aborting");
+      return false;
     }
   }
 
-  // All candidates have been evaluated - make sure there are no other outputs that have not been catered for
-  if (outputs.size() != outputs_verified.size()) {
-    LOG_ERROR("Block at height: " << height << " - Incorrect number of outputs - expected " << outputs_verified.size() << " but received " << outputs.size() << " - rejecting block");
-    return false;
+  // Get the audit data for the block that matures at this height
+  std::vector<std::pair<yield_tx_info, uint64_t>> audit_payouts;
+  const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
+  for (const auto &audit_hf : audit_hard_forks) {
+    uint64_t audit_lock_period = audit_hf.second.first;
+    uint64_t matured_audit_height = height - audit_lock_period - 1;
+    uint8_t hf = m_hardfork->get_ideal_version(matured_audit_height);
+    if (hf == audit_hf.first) {
+      // Found a matching audit
+      // Maturing height was during an audit - process accordingly
+      cryptonote::audit_block_info abi_matured;
+      ok = get_abi_entry(matured_audit_height, abi_matured);
+      if (!ok) {
+        LOG_PRINT_L1("Block at height: " << height << " - failed to obtain audit block information - aborting");
+        return false;
+      } else if (abi_matured.locked_coins_this_block == 0) {
+        LOG_PRINT_L1("Block at height: " << height << " - no audit payouts due - skipping");
+      } else {
+        // Iterate over the cached data for audits, calculating the audit payouts due
+        if (!calculate_audit_payouts(matured_audit_height, audit_payouts)) {
+          LOG_ERROR("Block at height: " << height << " - Failed to obtain audit payout information - aborting");
+          return false;
+        }
+      }
+      break;
+    }
+  }
+
+  // Check we have the correct number of entries
+  CHECK_AND_ASSERT_MES(b.protocol_tx.vout.size() == yield_payouts.size() + audit_payouts.size(), false, "Invalid number of outputs in protocol_tx - aborting");
+  
+  // Merge the yield and audit payouts into an iterable vector
+  std::vector<std::pair<yield_tx_info, uint64_t>> payouts{yield_payouts};
+  payouts.insert(payouts.end(), audit_payouts.begin(), audit_payouts.end());
+  
+  size_t output_idx = 0;
+  for (auto it = payouts.begin(); it != payouts.end(); it++, output_idx++) {
+
+    // Verify the output key
+    crypto::public_key out_key;
+    cryptonote::get_output_public_key(b.protocol_tx.vout[output_idx], out_key);
+    CHECK_AND_ASSERT_MES(out_key == it->first.return_address, false, "Incorrect output key detected in protocol_tx");
+
+    // Verify the output amount
+    uint64_t expected_amount = it->second;
+    CHECK_AND_ASSERT_MES(b.protocol_tx.vout[output_idx].amount == expected_amount, false, "Incorrect output amount detected in protocol_tx. expected_amount: " << expected_amount);
+    
+    // Verify the output asset type
+    std::string out_asset_type;
+    cryptonote::get_output_asset_type(b.protocol_tx.vout[output_idx], out_asset_type);
+    uint8_t hf_yield = m_hardfork->get_ideal_version(it->first.block_height);
+    if (hf_yield >= HF_VERSION_SALVIUM_ONE_PROOFS)
+      CHECK_AND_ASSERT_MES(out_asset_type == "SAL1", false, "Incorrect output asset_type (!= SAL1) detected in protocol_tx");
+    else
+      CHECK_AND_ASSERT_MES(out_asset_type == "SAL", false, "Incorrect output asset_type (!= SAL) detected in protocol_tx");
+      
+    // Verify the output unlock time
+    uint64_t out_unlock_time;
+    cryptonote::get_output_unlock_time(b.protocol_tx.vout[output_idx], out_unlock_time);
+    CHECK_AND_ASSERT_MES(out_unlock_time == CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, false, "Invalid output unlock time on protocol_tx output");
   }
 
   // Everything checks out
@@ -1933,46 +1821,16 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
   size_t txs_weight;
   uint64_t fee;
   
-  /**
-   * Here is where the magic happens - determination of the payments for the protocol_tx
-   *
-   * We need to know the following:
-   *   - address to send the funds to ("return_address")
-   *   - asset_type being burnt
-   *   - amount being burnt
-   *   - asset_type being minted
-   *
-   * (All of this information should be provided by the txpool_tx_meta_t object)
-   *
-   * From that little lot, we can hopefully work out the slippage on all of the TXs, and
-   * therefore the amount to be minted for each TX, and who to pay it to, etc, etc.
-   */
-  std::vector<txpool_tx_meta_t> protocol_metadata;
-  std::vector<cryptonote::protocol_data_entry> protocol_entries;
-  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, b.major_version, b.pricing_record, circ_supply, protocol_metadata))
+  if (!m_tx_pool.fill_block_template(b, median_weight, already_generated_coins, txs_weight, fee, expected_reward, b.major_version))
   {
     return false;
-  }
-  
-  // Clone the txpool_tx_meta_t data into a more useable format
-  for (auto& meta: protocol_metadata) {
-    cryptonote::protocol_data_entry entry;
-    entry.amount_burnt = meta.amount_burnt;
-    entry.amount_minted = 0;
-    entry.amount_slippage_limit = meta.amount_slippage_limit;
-    entry.source_asset = asset_type_from_id(meta.source_asset_id);
-    entry.destination_asset = asset_type_from_id(meta.destination_asset_id);
-    entry.return_address = meta.return_address;
-    entry.type = meta.tx_type;
-    entry.P_change = meta.one_time_public_key;
-    entry.return_pubkey = meta.return_pubkey;
-    protocol_entries.push_back(entry);
   }
 
   // Check to see if there are any matured YIELD TXs
   uint64_t yield_lock_period = get_config(m_nettype).STAKE_LOCK_PERIOD;
   uint64_t start_height = (height > yield_lock_period) ? height - yield_lock_period - 1 : 0;
 
+  std::vector<cryptonote::protocol_data_entry> protocol_entries;
   cryptonote::yield_block_info ybi_matured;
   bool ok = get_ybi_entry(start_height, ybi_matured);
   if (ok && ybi_matured.locked_coins_this_block > 0) {
@@ -1984,28 +1842,102 @@ bool Blockchain::create_block_template(block& b, const crypto::hash *from_block,
       return false;
     }
 
+    // Work out what the asset_type should be based on height of submission
+    uint8_t hf_submitted = m_hardfork->get_ideal_version(start_height);
+
     // Create the protocol_metadata entries here
     for (const auto& yield_entry: yield_payouts) {
       cryptonote::protocol_data_entry entry;
       entry.amount_burnt = yield_entry.second;
       entry.amount_minted = 0;
       entry.amount_slippage_limit = 0;
-      entry.source_asset = "SAL";
-      entry.destination_asset = "SAL";
+      if (hf_submitted >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+        entry.source_asset = "SAL1";
+        entry.destination_asset = "SAL1";
+      } else {
+        entry.source_asset = "SAL";
+        entry.destination_asset = "SAL";
+      }
       entry.return_address = yield_entry.first.return_address;
       entry.type = cryptonote::transaction_type::STAKE;
       entry.P_change = yield_entry.first.P_change;
       entry.return_pubkey = yield_entry.first.return_pubkey;
+      entry.origin_height = start_height;
       protocol_entries.push_back(entry);
     }
   }
+
+  // Get the audit data for the block that matures at this height
+  std::vector<std::pair<yield_tx_info, uint64_t>> audit_payouts;
+  const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
+  for (const auto &audit_hf : audit_hard_forks) {
+    uint64_t audit_lock_period = audit_hf.second.first;
+    uint64_t matured_audit_height = height - audit_lock_period - 1;
+    uint8_t hf = m_hardfork->get_ideal_version(matured_audit_height);
+    if (hf == audit_hf.first) {
+      // Found a matching audit
+      // Maturing height was during an audit - process accordingly
+      cryptonote::audit_block_info abi_matured;
+      ok = get_abi_entry(matured_audit_height, abi_matured);
+      if (!ok) {
+        LOG_PRINT_L1("Block at height: " << height << " - failed to obtain audit block information - aborting");
+        return false;
+      } else if (abi_matured.locked_coins_this_block == 0) {
+        LOG_PRINT_L1("Block at height: " << height << " - no audit payouts due - skipping");
+      } else {
+        // Iterate over the cached data for audits, calculating the audit payouts due
+        if (!calculate_audit_payouts(matured_audit_height, audit_payouts)) {
+          LOG_ERROR("Block at height: " << height << " - Failed to obtain audit payout information - aborting");
+          return false;
+        }
+
+        // Get the asset types
+        const std::pair<std::string, std::string> audit_asset_types = audit_hf.second.second;
+      
+        // Create the protocol_metadata entries here
+        for (const auto& audit_entry: audit_payouts) {
+          cryptonote::protocol_data_entry entry;
+          entry.amount_burnt = audit_entry.second;
+          entry.amount_minted = 0;
+          entry.amount_slippage_limit = 0;
+          entry.source_asset = audit_asset_types.first;
+          entry.destination_asset = audit_asset_types.second;
+          entry.return_address = audit_entry.first.return_address;
+          entry.type = cryptonote::transaction_type::AUDIT;
+          entry.P_change = audit_entry.first.P_change;
+          entry.return_pubkey = audit_entry.first.return_pubkey;
+          entry.origin_height = matured_audit_height;
+          protocol_entries.push_back(entry);
+        }
+      }
+      break;
+    }
+  }
+
+  /*
+  // From v8, we sort the protocol_tx outputs by ORIGIN_HEIGHT, OUTPUT_KEY, AMOUNT
+  if (b.major_version >= HF_VERSION_AUDIT2) {
+    std::sort(protocol_entries.begin(), protocol_entries.end(), [](const auto& lhs, const auto& rhs) {
+      // If origin block heights are different (only possible with mixed AUDIT+STAKE) sort by them first
+      if (lhs.origin_height < rhs.origin_height) return true;
+      if (lhs.origin_height > rhs.origin_height) return false;
+      
+      // If output keys are different, sort by them second
+      if (lhs.return_address < rhs.return_address) return true;
+      if (lhs.return_address > rhs.return_address) return false;
+      
+      // If block heights _and_ output keys are same, sort by amount third
+      return lhs.amount_burnt < rhs.amount_burnt;
+    });
+  }
+  */
   
   // Time to construct the protocol_tx
   uint64_t protocol_fee = 0;
   address_parse_info treasury_address_info;
   ok = cryptonote::get_account_address_from_str(treasury_address_info, m_nettype, get_config(m_nettype).TREASURY_ADDRESS);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to obtain treasury address info");
-  ok = construct_protocol_tx(height, protocol_fee, b.protocol_tx, protocol_entries, circ_supply, b.pricing_record, miner_address, treasury_address_info.address, b.major_version);
+  ok = construct_protocol_tx(height, b.protocol_tx, protocol_entries, b.major_version);
   CHECK_AND_ASSERT_MES(ok, false, "Failed to construct protocol tx");
   
   pool_cookie = m_tx_pool.cookie();
@@ -2726,7 +2658,11 @@ void Blockchain::get_output_key_mask_unlocked(const uint64_t& amount, const uint
 //------------------------------------------------------------------
 bool Blockchain::get_output_distribution(uint64_t amount, std::string asset_type, uint64_t from_height, uint64_t to_height, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &base, uint64_t &num_spendable_global_outs) const
 {
-  start_height = 0;
+  // rct outputs don't exist before v4
+  if (amount == 0 && m_nettype != network_type::FAKECHAIN)
+    start_height = m_hardfork->get_earliest_ideal_height_for_version(HF_VERSION_DYNAMIC_FEE);
+  else
+    start_height = 0;
   base = 0;
   num_spendable_global_outs = 0;
 
@@ -3471,9 +3407,9 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
       }
     }
   }
-
+  */
   // from v4, forbid invalid pubkeys
-  if (hf_version >= 4) {
+  if (hf_version >= 1) {
     for (const auto &o: tx.vout) {
       crypto::public_key output_public_key;
       if (!get_output_public_key(o, output_public_key)) {
@@ -3486,7 +3422,7 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
       }
     }
   }
-
+  /*
   // from v8, allow bulletproofs
   if (hf_version < 8) {
     if (tx.version >= 2) {
@@ -3585,10 +3521,9 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
       }
     }
   }
-  */
   
-  // from v16, forbid bulletproofs
-  if (hf_version > HF_VERSION_BULLETPROOF_PLUS) {
+  // from v1, forbid bulletproofs
+  if (hf_version >= HF_VERSION_BULLETPROOF_PLUS) {
     if (tx.version >= 2) {
       const bool bulletproof = rct::is_rct_bulletproof(tx.rct_signatures.type);
       if (bulletproof)
@@ -3599,7 +3534,41 @@ bool Blockchain::check_tx_outputs(const transaction& tx, tx_verification_context
       }
     }
   }
+  */
 
+  if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+    // for v5, force the audit and the new SalviumOne RCT data
+    if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT || tx.type == cryptonote::transaction_type::AUDIT) {
+      if (tx.rct_signatures.type != rct::RCTTypeSalviumOne) {
+        MERROR_VER("FullProofs plus Audit data required after v" + std::to_string(HF_VERSION_SALVIUM_ONE_PROOFS));
+        tvc.m_invalid_output = true;
+        return false;
+      }
+    } else {
+      if (tx.rct_signatures.type != rct::RCTTypeNull) {
+        MERROR_VER("NULL RCT required for coinbase TXs after v" + std::to_string(HF_VERSION_SALVIUM_ONE_PROOFS));
+        tvc.m_invalid_output = true;
+        return false;
+      }
+    }
+    
+  } else if (hf_version >= HF_VERSION_ENFORCE_FULL_PROOFS) {
+    // from v4, only allow bulletproofs plus _with_ full proofs on RCT transactions
+    if (tx.type == cryptonote::transaction_type::TRANSFER || tx.type == cryptonote::transaction_type::STAKE || tx.type == cryptonote::transaction_type::BURN || tx.type == cryptonote::transaction_type::CONVERT) {
+      if (tx.rct_signatures.type != rct::RCTTypeFullProofs) {
+        MERROR_VER("FullProofs required after v" + std::to_string(HF_VERSION_FULL_PROOFS));
+        tvc.m_invalid_output = true;
+        return false;
+      }
+    } else {
+      if (tx.rct_signatures.type != rct::RCTTypeNull) {
+        MERROR_VER("NULL RCT required for coinbase TXs after v" + std::to_string(HF_VERSION_FULL_PROOFS));
+        tvc.m_invalid_output = true;
+        return false;
+      }
+    }
+  }
+  
   // from v15, require view tags and asset types on outputs
   if (!check_output_types(tx, hf_version))
   {
@@ -3639,6 +3608,15 @@ bool Blockchain::check_tx_type_and_version(const transaction& tx, tx_verificatio
   if (hf_version >= HF_VERSION_ENABLE_N_OUTS) {
     if (tx.version >= TRANSACTION_VERSION_N_OUTS && tx.type != cryptonote::transaction_type::TRANSFER) {
       MERROR("N-out TXs are only permitted for TRANSFER TX type");
+      tvc.m_version_mismatch = true;
+      return false;
+    }
+  }
+
+  // Make sure CONVERT TXs are disabled until we are ready - belt and braces!
+  if (hf_version < HF_VERSION_ENABLE_CONVERT) {
+    if (tx.type == cryptonote::transaction_type::CONVERT) {
+      MERROR("CONVERT TXs are not permitted prior to v" + std::to_string(HF_VERSION_ENABLE_CONVERT));
       tvc.m_version_mismatch = true;
       return false;
     }
@@ -3684,7 +3662,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
       }
     }
   }
-  else if (rv.type == rct::RCTTypeSimple || rv.type == rct::RCTTypeBulletproof || rv.type == rct::RCTTypeBulletproof2 || rv.type == rct::RCTTypeCLSAG || rv.type == rct::RCTTypeBulletproofPlus)
+  else if (rv.type == rct::RCTTypeSimple || rv.type == rct::RCTTypeBulletproof || rv.type == rct::RCTTypeBulletproof2 || rv.type == rct::RCTTypeCLSAG || rv.type == rct::RCTTypeBulletproofPlus || rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumOne)
   {
     CHECK_AND_ASSERT_MES(!pubkeys.empty() && !pubkeys[0].empty(), false, "empty pubkeys");
     rv.mixRing.resize(pubkeys.size());
@@ -3725,7 +3703,7 @@ bool Blockchain::expand_transaction_2(transaction &tx, const crypto::hash &tx_pr
       }
     }
   }
-  else if (rv.type == rct::RCTTypeCLSAG || rv.type == rct::RCTTypeBulletproofPlus)
+  else if (rv.type == rct::RCTTypeCLSAG || rv.type == rct::RCTTypeBulletproofPlus || rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumOne)
   {
     if (!tx.pruned)
     {
@@ -3866,8 +3844,8 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     }
   }
 
-  // from v7, sorted ins
-  if (hf_version >= 7) {
+  // from v1, sorted ins
+  if (hf_version >= 1) {
     const crypto::key_image *last_key_image = NULL;
     for (size_t n = 0; n < tx.vin.size(); ++n)
     {
@@ -3879,6 +3857,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
         {
           MERROR_VER("transaction has unsorted inputs");
           tvc.m_verifivation_failed = true;
+          assert(false);
           return false;
         }
         last_key_image = &in_to_key.k_image;
@@ -3886,6 +3865,20 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     }
   }
 
+  if (tx.type == cryptonote::transaction_type::AUDIT) {
+    // Make sure we are supposed to accept AUDIT txs at this point
+    const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> audit_hard_forks = get_config(m_nettype).AUDIT_HARD_FORKS;
+    CHECK_AND_ASSERT_MES(audit_hard_forks.find(hf_version) != audit_hard_forks.end(), false, "trying to audit outside an audit fork");
+    std::string expected_asset_type = audit_hard_forks.at(hf_version).second.first;
+    CHECK_AND_ASSERT_MES(tx.source_asset_type == expected_asset_type, false, "trying to spend " << tx.source_asset_type << " coins in an AUDIT TX");
+  } else {
+    if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL1", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
+    } else {
+      CHECK_AND_ASSERT_MES(tx.source_asset_type == "SAL", false, "trying to spend " << tx.source_asset_type << " coins in a non-AUDIT TX");
+    }
+  }
+  
   std::vector<std::vector<rct::ctkey>> pubkeys(tx.vin.size());
   std::vector < uint64_t > results;
   results.resize(tx.vin.size(), 0);
@@ -3906,6 +3899,9 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
 
     // Make sure the user isn't trying to spend BURNt coins
     CHECK_AND_ASSERT_MES(in_to_key.asset_type not_eq "BURN", false, "trying to spend BURNt coins");
+
+    // Make sure only a single asset_type is being spent, and that is the one set on the TX
+    CHECK_AND_ASSERT_MES(in_to_key.asset_type == tx.source_asset_type, false, "trying to spend " << in_to_key.asset_type << " coins in a TX with " << tx.source_asset_type << " source asset type");
 
     // make sure tx output has key offset(s) (is signed to be used)
     CHECK_AND_ASSERT_MES(in_to_key.key_offsets.size(), false, "empty in_to_key.key_offsets in transaction with id " << get_transaction_hash(tx));
@@ -3972,7 +3968,7 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
                        false, "Transaction spends at least one output which is too young");
 
   // Warn that new RCT types are present, and thus the cache is not being used effectively
-  static constexpr const std::uint8_t RCT_CACHE_TYPE = rct::RCTTypeBulletproofPlus;
+  static constexpr const std::uint8_t RCT_CACHE_TYPE = rct::RCTTypeSalviumOne;
   if (tx.rct_signatures.type > RCT_CACHE_TYPE)
   {
     MWARNING("RCT cache is not caching new verification results. Please update RCT_CACHE_TYPE!");
@@ -4003,6 +3999,20 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     // obviously, the original and simple rct APIs use a mixRing that's indexes
     // in opposite orders, because it'd be too simple otherwise...
     const rct::rctSig &rv = tx.rct_signatures;
+    
+    // Check that after full proofs are enabled, the RCT version is set to enforce full proofs
+    if (hf_version >= HF_VERSION_SALVIUM_ONE_PROOFS) {
+      if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeSalviumOne) {
+        MERROR_VER("Unsupported rct type (full proofs (with audit data) are required): " << rv.type);
+        return false;
+      }
+    } else if (hf_version >= HF_VERSION_ENFORCE_FULL_PROOFS) {
+      if (rv.type != rct::RCTTypeNull && rv.type != rct::RCTTypeFullProofs) {
+        MERROR_VER("Unsupported rct type (full proofs are required): " << rv.type);
+        return false;
+      }
+    }
+    
     switch (rv.type)
     {
     case rct::RCTTypeNull: {
@@ -4015,6 +4025,8 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     case rct::RCTTypeBulletproof2:
     case rct::RCTTypeCLSAG:
     case rct::RCTTypeBulletproofPlus:
+    case rct::RCTTypeFullProofs:
+    case rct::RCTTypeSalviumOne:
     {
       if (!ver_rct_non_semantics_simple_cached(tx, pubkeys, m_rct_ver_cache, RCT_CACHE_TYPE, hf_version))
       {
@@ -4091,22 +4103,6 @@ bool Blockchain::check_tx_inputs(transaction& tx, tx_verification_context &tvc, 
     default:
       MERROR_VER("Unsupported rct type: " << rv.type);
       return false;
-    }
-
-    // for bulletproofs, check they're only multi-output after v8
-    if (rct::is_rct_bulletproof(rv.type))
-    {
-      if (hf_version < 8)
-      {
-        for (const rct::Bulletproof &proof: rv.p.bulletproofs)
-        {
-          if (proof.V.size() > 1)
-          {
-            MERROR_VER("Multi output bulletproofs are invalid before v8");
-            return false;
-          }
-        }
-      }
     }
   }
   return true;
@@ -4413,6 +4409,59 @@ uint64_t Blockchain::get_adjusted_time(uint64_t height) const
   return (adjusted_current_block_ts < median_ts ? adjusted_current_block_ts : median_ts);
 }
 //------------------------------------------------------------------
+bool Blockchain::calculate_audit_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& audit_container)
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+
+  // Clear the audit payout amounts
+  audit_container.clear();
+
+  // Get the AUDIT TX information for matured staked coins
+  std::vector<cryptonote::yield_tx_info> audit_entries;
+  // We get the audit_tx_info from the block where they entered the chain
+  int audit_tx_result = m_db->get_audit_tx_info(start_height, audit_entries);
+  if (!audit_entries.size()) {
+
+    // Report error and abort
+    LOG_ERROR("calculate_audit_payouts() called, but no audit TXs found at height " << start_height << " - aborting");
+    return false;
+  }
+
+  // Build a blacklist of staking TXs _not_ to pay out for
+  const std::set<std::string> txs_blacklist = {
+    "017a79539e69ce16e91d9aa2267c102f336678c41636567c1129e3e72149499a"
+  };
+  
+  // Get the ABI information for the 21,600 blocks that the matured TX(s), we can calculate audit
+  for (const auto& entry: audit_entries) {
+    // Check to see if this entry is in the blacklist
+    if (txs_blacklist.find(epee::string_tools::pod_to_hex(entry.tx_hash)) != txs_blacklist.end()) {
+      LOG_ERROR("calculate_audit_payouts() found blacklisted TX at height " << start_height << " - skipping payout");
+      continue;
+    }
+    audit_container.emplace_back(std::make_pair(entry, entry.locked_coins));
+  }
+  
+  // Return success to caller
+  return true;
+}
+//------------------------------------------------------------------
+bool Blockchain::get_abi_entry(const uint64_t height, cryptonote::audit_block_info& abi)
+{
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  
+  // Clear the provided container
+  std::memset(&abi, 0, sizeof(struct cryptonote::audit_block_info));
+
+  int result = m_db->get_audit_block_info(height, abi);
+  if (result) {
+    // Request failed - report error and bail out
+    LOG_ERROR("failed to retrieve ABI entry for height " << height << " - aborting");
+    return false;
+  }
+  return true;
+}
+//------------------------------------------------------------------
 bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_container)
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
@@ -4430,9 +4479,17 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
     LOG_ERROR("calculate_yield_payouts() called, but no yield TXs found at height " << start_height << " - aborting");
     return false;
   }
-    
+
+  // Build a blacklist of staking TXs _not_ to pay out for
+  const std::set<std::string> txs_blacklist = {};
+  
   // Get the YBI information for the 21,600 blocks that the matured TX(s), we can calculate yield
   for (const auto& entry: yield_entries) {
+    // Check to see if this entry is in the blacklist
+    if (txs_blacklist.find(epee::string_tools::pod_to_hex(entry.tx_hash)) != txs_blacklist.end()) {
+      LOG_ERROR("calculate_yield_payouts() found blacklisted TX at height " << start_height << " - skipping payout");
+      continue;
+    }
     yield_container.emplace_back(std::make_pair(entry, entry.locked_coins));
   }
   
@@ -4446,6 +4503,7 @@ bool Blockchain::calculate_yield_payouts(const uint64_t start_height, std::vecto
     }
     yield_block_info ybi = m_yield_block_info_cache[idx];
     if (ybi.slippage_total_this_block == 0) continue;
+    if (ybi.locked_coins_tally == 0) continue;
     
     boost::multiprecision::int128_t slippage_128 = ybi.slippage_total_this_block;
 
@@ -4983,7 +5041,7 @@ leave:
   TIME_MEASURE_FINISH(vmt);
 
   TIME_MEASURE_START(vpt);
-  if(!validate_protocol_transaction(bl, blockchain_height, txs, m_hardfork->get_current_version()))
+  if(!validate_protocol_transaction(bl, blockchain_height, m_hardfork->get_current_version()))
   {
     MERROR_VER("Block with id: " << id << " has incorrect protocol transaction");
     bvc.m_verifivation_failed = true;
@@ -5020,8 +5078,10 @@ leave:
       uint64_t long_term_block_weight = get_next_long_term_block_weight(block_weight);
       cryptonote::blobdata bd = cryptonote::block_to_blob(bl);
       yield_block_info new_ybi;
+      audit_block_info new_abi;
       std::memset(&new_ybi, 0, sizeof(struct yield_block_info));
-      new_height = m_db->add_block(std::make_pair(std::move(bl), std::move(bd)), block_weight, long_term_block_weight, cumulative_difficulty, already_generated_coins, txs, m_nettype, new_ybi);
+      std::memset(&new_abi, 0, sizeof(struct audit_block_info));
+      new_height = m_db->add_block(std::make_pair(std::move(bl), std::move(bd)), block_weight, long_term_block_weight, cumulative_difficulty, already_generated_coins, txs, m_nettype, new_ybi, new_abi);
 
       // Update the YBI cache data
       uint64_t yield_lock_period = cryptonote::get_config(m_nettype).STAKE_LOCK_PERIOD;
@@ -5417,7 +5477,7 @@ bool Blockchain::cleanup_handle_incoming_blocks(bool force_sync)
       {
         m_sync_counter = 0;
         m_bytes_to_sync = 0;
-        m_async_service.dispatch(boost::bind(&Blockchain::store_blockchain, this));
+        boost::asio::dispatch(m_async_service, boost::bind(&Blockchain::store_blockchain, this));
       }
       else if(m_db_sync_mode == db_sync)
       {
@@ -5849,7 +5909,13 @@ bool Blockchain::prepare_handle_incoming_blocks(const std::vector<block_complete
       {
         const txin_to_key &in_to_key = boost::get < txin_to_key > (txin);
         // no need to check for duplicate here.
+        // HERE BE DRAGONS!!!
+        // SRCG: ring tweak to indexed per asset_type - DO NOT COMMIT UNTIL IT IS ALL WORKING
         auto absolute_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
+        //std::vector<uint64_t> asset_offsets = relative_output_offsets_to_absolute(in_to_key.key_offsets);
+        //std::vector<uint64_t> absolute_offsets;
+        //m_db->get_output_id_from_asset_type_output_index(in_to_key.asset_type, asset_offsets, absolute_offsets);
+        // LAND AHOY!!!
         for (const auto & offset : absolute_offsets)
           offset_map[in_to_key.amount].push_back(offset);
 
@@ -6127,7 +6193,7 @@ void Blockchain::cancel()
 }
 
 #if defined(PER_BLOCK_CHECKPOINT)
-static const char expected_block_hashes_hash[] = "3cb6d33c311e54f2b8439a3e4cc047f6b9b74db9fd92955f1db131a5dfce1edf";
+static const char expected_block_hashes_hash[] = "7dace1238f8711aa30690e0e787c81d5cc9ee99c81b6ff0f88545903ecb9a976";
 void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints)
 {
   if (get_checkpoints == nullptr || !m_fast_sync)

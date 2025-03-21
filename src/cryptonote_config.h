@@ -31,6 +31,7 @@
 #pragma once
 
 #include <array>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <boost/uuid/uuid.hpp>
@@ -137,6 +138,10 @@
 
 #define COMMAND_RPC_GET_BLOCKS_FAST_MAX_BLOCK_COUNT     1000
 #define COMMAND_RPC_GET_BLOCKS_FAST_MAX_TX_COUNT        20000
+#define DEFAULT_RPC_MAX_CONNECTIONS_PER_PUBLIC_IP       3
+#define DEFAULT_RPC_MAX_CONNECTIONS_PER_PRIVATE_IP      25
+#define DEFAULT_RPC_MAX_CONNECTIONS                     100
+#define DEFAULT_RPC_SOFT_LIMIT_SIZE                     25 * 1024 * 1024 // 25 MiB
 #define MAX_RPC_CONTENT_LENGTH                          1048576 // 1 MB
 
 #define P2P_LOCAL_WHITE_PEERLIST_LIMIT                  1000
@@ -176,6 +181,9 @@
 #define MINER_CONFIG_FILE_NAME                  "miner_conf.json"
 
 #define THREAD_STACK_SIZE                       5 * 1024 * 1024
+
+#define SECRET_ENCRYPTION_PK_STR                "5e860406bf9221dba6409faa6eb8fecd6f34acc4935634e76b64b90bf2b6d6a6"
+  
 
 /*
 #define HF_VERSION_DYNAMIC_FEE                  4
@@ -218,13 +226,25 @@
 #define HF_VERSION_2021_SCALING                 2
 #define HF_VERSION_ENABLE_N_OUTS                2
 
-#define HF_VERSION_REQUIRE_VIEW_TAGS            3
+#define HF_VERSION_FULL_PROOFS                  3
 
+#define HF_VERSION_ENFORCE_FULL_PROOFS          4
+
+#define HF_VERSION_SHUTDOWN_USER_TXS            5
+
+#define HF_VERSION_AUDIT1                       6
+#define HF_VERSION_SALVIUM_ONE_PROOFS           6
+
+#define HF_VERSION_AUDIT1_PAUSE                 7
+#define HF_VERSION_AUDIT2                       8
+#define HF_VERSION_AUDIT2_PAUSE                 9
+
+#define HF_VERSION_REQUIRE_VIEW_TAGS            255
 #define HF_VERSION_ENABLE_CONVERT               255
 #define HF_VERSION_ENABLE_ORACLE                255
 #define HF_VERSION_SLIPPAGE_YIELD               255
 
-#define TESTNET_VERSION                         12
+#define TESTNET_VERSION                         14
 #define STAGENET_VERSION                        1
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
@@ -275,10 +295,15 @@ namespace config
   
   uint32_t const GENESIS_NONCE = 10000;
 
+  const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> AUDIT_HARD_FORKS = {
+    {HF_VERSION_AUDIT1, {30*24*10, {"SAL", "SAL1"}}},
+    {HF_VERSION_AUDIT2, {30*24*14, {"SAL", "SAL1"}}}
+  };
+  
   const uint64_t STAKE_LOCK_PERIOD = 30*24*30;
 
   std::string const TREASURY_ADDRESS = "SaLvdZR6w1A21sf2Wh6jYEh1wzY4GSbT7RX6FjyPsnLsffWLrzFQeXUXJcmBLRWDzZC2YXeYe5t7qKsnrg9FpmxmEcxPHsEYfqA";
-  
+
   // Hash domain separators
   const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
   const char HASH_KEY_BULLETPROOF_PLUS_EXPONENT[] = "bulletproof_plus";
@@ -288,6 +313,8 @@ namespace config
   const unsigned char HASH_KEY_ENCRYPTED_PAYMENT_ID = 0x8d;
   const unsigned char HASH_KEY_WALLET = 0x8c;
   const unsigned char HASH_KEY_WALLET_CACHE = 0x8d;
+  const unsigned char HASH_KEY_BACKGROUND_CACHE = 0x8e;
+  const unsigned char HASH_KEY_BACKGROUND_KEYS_FILE = 0x8f;
   const unsigned char HASH_KEY_RPC_PAYMENT_NONCE = 0x58;
   const unsigned char HASH_KEY_MEMORY = 'k';
   const unsigned char HASH_KEY_MULTISIG[] = {'M', 'u', 'l', 't' , 'i', 's', 'i', 'g', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -348,6 +375,11 @@ namespace config
     std::string const GENESIS_TX = "020001ff000180c0d0c7bbbff60302838f76f69b70bb0d0f1961a12f6082a033d22285c07d4f12ec93c28197ae2a600353414c3c2101009e8b0abce686c417a1b1344eb7337176bdca90cc928b0facec8a9516190645010000";
     uint32_t const GENESIS_NONCE = 10001;
 
+    const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> AUDIT_HARD_FORKS = {
+      {HF_VERSION_AUDIT1, {30, {"SAL", "SAL1"}}},
+      {HF_VERSION_AUDIT2, {40, {"SAL", "SAL1"}}},
+    };
+    
     const uint64_t STAKE_LOCK_PERIOD = 20;
   
     std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.io:8443", "oracle.salvium.io:8443", "oracle.salvium.io:8443"}};
@@ -374,6 +406,8 @@ namespace config
     std::string const GENESIS_TX = "013c01ff0001ffffffffffff0302df5d56da0c7d643ddd1ce61901c7bdc5fb1738bfe39fbe69c28a3a7032729c0f2101168d0c4ca86fb55a4cf6a36d31431be1c53a3bd7411bb24e8832410289fa6f3b";
     uint32_t const GENESIS_NONCE = 10002;
 
+    const std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> AUDIT_HARD_FORKS = { {HF_VERSION_AUDIT1, {30, {"SAL", "SAL1"}}} };
+    
     const uint64_t STAKE_LOCK_PERIOD = 20;
   
     std::array<std::string, 3> const ORACLE_URLS = {{"oracle.salvium.io:8443", "oracle.salvium.io:8443", "oracle.salvium.io:8443"}};
@@ -410,7 +444,8 @@ namespace cryptonote
     uint32_t const GENESIS_NONCE;
     std::array<std::string, 3> const ORACLE_URLS;
     std::string const ORACLE_PUBLIC_KEY;
-    uint64_t STAKE_LOCK_PERIOD;
+    uint64_t const STAKE_LOCK_PERIOD;
+    std::map<uint8_t, std::pair<uint64_t, std::pair<std::string, std::string>>> const AUDIT_HARD_FORKS;
     std::string TREASURY_ADDRESS;
   };
   inline const config_t& get_config(network_type nettype)
@@ -428,6 +463,7 @@ namespace cryptonote
       ::config::ORACLE_URLS,
       ::config::ORACLE_PUBLIC_KEY,
       ::config::STAKE_LOCK_PERIOD,
+      ::config::AUDIT_HARD_FORKS,
       ::config::TREASURY_ADDRESS
     };
     static const config_t testnet = {
@@ -443,6 +479,7 @@ namespace cryptonote
       ::config::testnet::ORACLE_URLS,
       ::config::testnet::ORACLE_PUBLIC_KEY,
       ::config::testnet::STAKE_LOCK_PERIOD,
+      ::config::testnet::AUDIT_HARD_FORKS,
       ::config::testnet::TREASURY_ADDRESS
     };
     static const config_t stagenet = {
@@ -458,6 +495,7 @@ namespace cryptonote
       ::config::stagenet::ORACLE_URLS,
       ::config::stagenet::ORACLE_PUBLIC_KEY,
       ::config::stagenet::STAKE_LOCK_PERIOD,
+      ::config::stagenet::AUDIT_HARD_FORKS,
       ::config::stagenet::TREASURY_ADDRESS
     };
     switch (nettype)

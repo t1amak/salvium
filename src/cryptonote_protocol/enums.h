@@ -54,6 +54,7 @@ namespace cryptonote
     BURN = 5,
     STAKE = 6,
     RETURN = 7,
-    MAX = 7
+    AUDIT = 8,
+    MAX = 8
   };
 }

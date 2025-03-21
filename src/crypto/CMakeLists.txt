@@ -75,7 +75,7 @@ target_link_libraries(cncrypto
     mx25519_static
     randomx
     ${Boost_SYSTEM_LIBRARY}
-    ${sodium_LIBRARIES}
+    ${SODIUM_LIBRARY}
   PRIVATE
     ${EXTRA_LIBRARIES})
 target_include_directories(cncrypto

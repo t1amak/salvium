@@ -31,8 +31,8 @@
 #pragma once
 
 //local headers
-#include "crypto/x25519.h"
 #include "core_types.h"
+#include "mx25519.h"
 #include "ringct/rctTypes.h"
 
 //third party headers
@@ -52,7 +52,9 @@ namespace carrot
 // - encrypted amount
 // - encrypted janus anchor
 // - view tag
-// - Return payment F point
+// - ephemeral pubkey
+// - tx first key image
+// - SPARC F-point
 ///
 struct CarrotEnoteV1 final
 {
@@ -67,12 +69,18 @@ struct CarrotEnoteV1 final
     /// view_tag
     view_tag_t view_tag;
     /// D_e
-    crypto::x25519_pubkey enote_ephemeral_pubkey;
+    mx25519_pubkey enote_ephemeral_pubkey;
     /// L_0
     crypto::key_image tx_first_key_image;
     /// F
     crypto::public_key F_point;
+    /// Asset_type
+    std::string asset_type;
 };
+
+/// equality operators
+bool operator==(const CarrotEnoteV1 &a, const CarrotEnoteV1 &b);
+static inline bool operator!=(const CarrotEnoteV1 &a, const CarrotEnoteV1 &b) { return !(a == b); }
 
 ////
 // CarrotCoinbaseEnoteV1
@@ -80,6 +88,8 @@ struct CarrotEnoteV1 final
 // - cleartext amount
 // - encrypted janus anchor
 // - view tag
+// - ephemeral pubkey
+// - block index
 ///
 struct CarrotCoinbaseEnoteV1 final
 {
@@ -92,18 +102,15 @@ struct CarrotCoinbaseEnoteV1 final
     /// view_tag
     view_tag_t view_tag;
     /// D_e
-    crypto::x25519_pubkey enote_ephemeral_pubkey;
+    mx25519_pubkey enote_ephemeral_pubkey;
     /// block_index
     std::uint64_t block_index;
+    /// Asset_type
+    std::string asset_type;
 };
 
-/**
-* brief: gen_carrot_enote_v1() - generate a carrot v1 enote (all random)
-*/
-CarrotEnoteV1 gen_carrot_enote_v1();
-/**
-* brief: gen_carrot_coinbase_enote_v1() - generate a carrot coinbase v1 enote (all random)
-*/
-CarrotCoinbaseEnoteV1 gen_carrot_coinbase_enote_v1();
+/// equality operators
+bool operator==(const CarrotCoinbaseEnoteV1 &a, const CarrotCoinbaseEnoteV1 &b);
+static inline bool operator!=(const CarrotCoinbaseEnoteV1 &a, const CarrotCoinbaseEnoteV1 &b) { return !(a == b); }
 
 } //namespace carrot

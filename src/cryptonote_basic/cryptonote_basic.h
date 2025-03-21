@@ -117,19 +117,19 @@ namespace cryptonote
   struct txout_to_carrot_key
   {
     txout_to_carrot_key() { }
-    txout_to_carrot_key(const crypto::public_key &_key, const std::string &_asset_type, const uint64_t _unlock_time, const carrot::view_tag_t &_view_tag, const carrot::encrypted_janus_anchor_t &_anchor) : key(_key), asset_type(_asset_type), unlock_time(_unlock_time), view_tag(_view_tag), anchor(_anchor) { }
+    txout_to_carrot_key(const crypto::public_key &_key, const std::string &_asset_type, const uint64_t _unlock_time, const carrot::view_tag_t &_view_tag, const carrot::encrypted_janus_anchor_t &_anchor) : key(_key), asset_type(_asset_type), unlock_time(_unlock_time), view_tag(_view_tag), encrypted_janus_anchor(_anchor) { }
     crypto::public_key key;
     std::string asset_type;
     uint64_t unlock_time;
-    carrot::encrypted_janus_anchor_t anchor;
+    carrot::encrypted_janus_anchor_t encrypted_janus_anchor;
     carrot::view_tag_t view_tag;
 
     BEGIN_SERIALIZE_OBJECT()
       FIELD(key)
       FIELD(asset_type)
       VARINT_FIELD(unlock_time)
-      FIELD(anchor)
       FIELD(view_tag)
+      FIELD(encrypted_janus_anchor)
     END_SERIALIZE()
   };
 
@@ -529,6 +529,18 @@ namespace cryptonote
 
     return boost::apply_visitor(txin_signature_size_visitor(), tx_in);
   }
+
+  struct audit_block_info {
+    uint64_t block_height;
+    uint64_t locked_coins_this_block;
+    uint64_t locked_coins_tally;
+
+    BEGIN_SERIALIZE()
+      VARINT_FIELD(block_height)
+      VARINT_FIELD(locked_coins_this_block)
+      VARINT_FIELD(locked_coins_tally)
+    END_SERIALIZE()
+  };
 
   struct yield_block_info {
     uint64_t block_height;

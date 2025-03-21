@@ -33,7 +33,7 @@
 //local headers
 #include "core_types.h"
 #include "crypto/crypto.h"
-#include "crypto/x25519.h"
+#include "mx25519.h"
 
 //third party headers
 
@@ -68,7 +68,7 @@ struct device_error: public std::runtime_error
     /**
      * param: dev_make - e.g. "Trezor", "Ledger"
      * param: dev_model - e.g. "Model T", "Nano X"
-     * param: func_called - verbatim device interface method name, e.g. "view_key_8_scalar_mult_x25519"
+     * param: func_called - verbatim device interface method name, e.g. "view_key_scalar_mult_x25519"
      * param: msg - arbitrary error message
      * param: code - arbitrary error code
      */
@@ -113,13 +113,13 @@ struct view_incoming_key_device
         crypto::public_key &kvP) const = 0;
 
     /**
-     * brief: view_key_8_scalar_mult_x25519 - do an X25519 scalar mult and cofactor clear against the incoming view key
+     * brief: view_key_scalar_mult_x25519 - do an X25519 scalar mult and cofactor clear against the incoming view key
      * param: D - X25519 base point
-     * outparam: kv8D = 8 k_v D
+     * outparam: kvD = k_v D
      * return: true on success, false on failure (e.g. unable to decompress point)
      */
-    virtual bool view_key_8_scalar_mult_x25519(const crypto::x25519_pubkey &D,
-        crypto::x25519_pubkey &kv8D) const = 0;
+    virtual bool view_key_scalar_mult_x25519(const mx25519_pubkey &D,
+        mx25519_pubkey &kvD) const = 0;
 
     /**
      * brief: make_janus_anchor_special - make a janus anchor for "special" enotes
@@ -128,7 +128,7 @@ struct view_incoming_key_device
      * param: account_spend_pubkey - K_s
      * outparam: anchor_special_out - anchor_sp = anchor_sp = H_16(D_e, input_context, Ko, k_v, K_s)
      */
-    virtual void make_janus_anchor_special(const crypto::x25519_pubkey &enote_ephemeral_pubkey,
+    virtual void make_janus_anchor_special(const mx25519_pubkey &enote_ephemeral_pubkey,
         const input_context_t &input_context,
         const crypto::public_key &onetime_address,
         const crypto::public_key &account_spend_pubkey,
@@ -155,11 +155,26 @@ struct view_balance_secret_device
      * param: input_context - input_context
      * outparam: s_sender_receiver_out - s_sr = s^ctx_sr = H_32(s_sr, D_e, input_context)
      */
-    virtual void make_internal_sender_receiver_secret(const crypto::x25519_pubkey &enote_ephemeral_pubkey,
+    virtual void make_internal_sender_receiver_secret(const mx25519_pubkey &enote_ephemeral_pubkey,
         const input_context_t &input_context,
         crypto::hash &s_sender_receiver_out) const = 0;
 
     virtual ~view_balance_secret_device() = default;
+};
+
+struct generate_address_secret_device
+{
+    /**
+    * brief: make_index_extension_generator - make carrot index extension generator s^j_gen
+    * param: major_index - j_major
+    * param: minor_index - j_minor
+    * outparam: address_generator_out - s^j_gen = H_32[s_ga](j_major, j_minor)
+    */
+    virtual void make_index_extension_generator(const std::uint32_t major_index,
+        const std::uint32_t minor_index,
+        crypto::secret_key &address_generator_out) const = 0;
+
+    virtual ~generate_address_secret_device() = default;
 };
 
 } //namespace carrot

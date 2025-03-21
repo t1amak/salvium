@@ -33,10 +33,12 @@
 #include "common/container_helpers.h"
 #include "enote_utils.h"
 #include "misc_log_ex.h"
+#include "ringct/rctOps.h"
 
 //third party headers
 
 //standard headers
+#include <set>
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "carrot"
@@ -44,13 +46,20 @@
 namespace carrot
 {
 //-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
+template <typename T>
+struct compare_memcmp{ bool operator()(const T &a, const T &b) const { return memcmp(&a, &b, sizeof(T)) < 0; } };
+template <typename T>
+using memcmp_set = std::set<T, compare_memcmp<T>>;
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 std::optional<AdditionalOutputType> get_additional_output_type(const size_t num_outgoing,
     const size_t num_selfsend,
-    const bool remaining_change,
+    const bool need_change_output,
     const bool have_payment_type_selfsend)
 {
     const size_t num_outputs = num_outgoing + num_selfsend;
-    const bool already_completed = num_outputs >= 2 && num_selfsend >= 1 && !remaining_change;
+    const bool already_completed = num_outputs >= 2 && num_selfsend >= 1 && !need_change_output;
     if (num_outputs == 0)
     {
         ASSERT_MES_AND_THROW("get additional output type: set contains 0 outputs");
@@ -65,11 +74,11 @@ std::optional<AdditionalOutputType> get_additional_output_type(const size_t num_
         {
             return AdditionalOutputType::CHANGE_SHARED;
         }
-        else if (!remaining_change)
+        else if (!need_change_output)
         {
             return AdditionalOutputType::DUMMY;
         }
-        else // num_selfsend == 1 && remaining_change
+        else // num_selfsend == 1 && need_change_output
         {
             if (have_payment_type_selfsend)
             {
@@ -95,15 +104,14 @@ std::optional<AdditionalOutputType> get_additional_output_type(const size_t num_
 tools::optional_variant<CarrotPaymentProposalV1, CarrotPaymentProposalSelfSendV1> get_additional_output_proposal(
     const size_t num_outgoing,
     const size_t num_selfsend,
-    const rct::xmr_amount remaining_change,
+    const rct::xmr_amount needed_change_amount,
     const bool have_payment_type_selfsend,
-    const crypto::public_key &change_address_spend_pubkey,
-    const crypto::x25519_pubkey &other_enote_ephemeral_pubkey)
+    const crypto::public_key &change_address_spend_pubkey)
 {
     const std::optional<AdditionalOutputType> additional_output_type = get_additional_output_type(
             num_outgoing,
             num_selfsend,
-            remaining_change,
+            needed_change_amount,
             have_payment_type_selfsend
         );
 
@@ -115,23 +123,23 @@ tools::optional_variant<CarrotPaymentProposalV1, CarrotPaymentProposalSelfSendV1
     case AdditionalOutputType::PAYMENT_SHARED:
         return CarrotPaymentProposalSelfSendV1{
             .destination_address_spend_pubkey = change_address_spend_pubkey,
-            .amount = remaining_change,
+            .amount = needed_change_amount,
             .enote_type = CarrotEnoteType::PAYMENT,
-            .enote_ephemeral_pubkey = other_enote_ephemeral_pubkey
+            .enote_ephemeral_pubkey = std::nullopt
         };
     case AdditionalOutputType::CHANGE_SHARED:
         return CarrotPaymentProposalSelfSendV1{
             .destination_address_spend_pubkey = change_address_spend_pubkey,
-            .amount = remaining_change,
+            .amount = needed_change_amount,
             .enote_type = CarrotEnoteType::CHANGE,
-            .enote_ephemeral_pubkey = other_enote_ephemeral_pubkey
+            .enote_ephemeral_pubkey = std::nullopt
         };
     case AdditionalOutputType::CHANGE_UNIQUE:
         return CarrotPaymentProposalSelfSendV1{
             .destination_address_spend_pubkey = change_address_spend_pubkey,
-            .amount = remaining_change,
+            .amount = needed_change_amount,
             .enote_type = CarrotEnoteType::CHANGE,
-            .enote_ephemeral_pubkey = crypto::x25519_pubkey_gen()
+            .enote_ephemeral_pubkey = std::nullopt
         };
     case AdditionalOutputType::DUMMY:
         return CarrotPaymentProposalV1{
@@ -144,8 +152,9 @@ tools::optional_variant<CarrotPaymentProposalV1, CarrotPaymentProposalSelfSendV1
     ASSERT_MES_AND_THROW("get additional output proposal: unrecognized additional output type");
 }
 //-------------------------------------------------------------------------------------------------------------------
-void get_output_enote_proposals(std::vector<CarrotPaymentProposalV1> &&normal_payment_proposals,
-    std::vector<CarrotPaymentProposalSelfSendV1> &&selfsend_payment_proposals,
+void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &normal_payment_proposals,
+    const std::vector<CarrotPaymentProposalSelfSendV1> &selfsend_payment_proposals,
+    const std::optional<encrypted_payment_id_t> &dummy_encrypted_payment_id,
     const view_balance_secret_device *s_view_balance_dev,
     const view_incoming_key_device *k_view_dev,
     const crypto::public_key &account_spend_pubkey,
@@ -154,7 +163,6 @@ void get_output_enote_proposals(std::vector<CarrotPaymentProposalV1> &&normal_pa
     encrypted_payment_id_t &encrypted_payment_id_out)
 {
     output_enote_proposals_out.clear();
-    encrypted_payment_id_out = null_payment_id;
 
     // assert payment proposals numbers
     const size_t num_proposals = normal_payment_proposals.size() + selfsend_payment_proposals.size();
@@ -178,14 +186,11 @@ void get_output_enote_proposals(std::vector<CarrotPaymentProposalV1> &&normal_pa
         CHECK_AND_ASSERT_THROW_MES(normal_payment_proposal.randomness != janus_anchor_t{},
             "get output enote proposals: normal payment proposal has unset anchor_norm AKA randomness");
 
-    // sort normal payment proposals by anchor_norm and assert uniqueness of randomness for each payment
-    const auto sort_by_randomness = [](const CarrotPaymentProposalV1 &a, const CarrotPaymentProposalV1 &b) -> bool
-    {
-        return memcmp(&a.randomness, &b.randomness, JANUS_ANCHOR_BYTES) < 0;
-    };
-    std::sort(normal_payment_proposals.begin(), normal_payment_proposals.end(), sort_by_randomness);
-    const bool has_unique_randomness = tools::is_sorted_and_unique(normal_payment_proposals,
-        sort_by_randomness);
+    // assert uniqueness of randomness for each payment
+    memcmp_set<janus_anchor_t> randomnesses;
+    for (const CarrotPaymentProposalV1 &normal_payment_proposal : normal_payment_proposals)
+        randomnesses.insert(normal_payment_proposal.randomness);
+    const bool has_unique_randomness = randomnesses.size() == normal_payment_proposals.size();
     CHECK_AND_ASSERT_THROW_MES(has_unique_randomness,
         "get output enote proposals: normal payment proposals contain duplicate anchor_norm AKA randomness");
 
@@ -199,31 +204,38 @@ void get_output_enote_proposals(std::vector<CarrotPaymentProposalV1> &&normal_pa
     {
         encrypted_payment_id_t encrypted_payment_id;
         get_output_proposal_normal_v1(normal_payment_proposals[i],
-                                      tx_first_key_image,
-                                      *k_view_dev,
-                                      tools::add_element(output_enote_proposals_out),
-                                      encrypted_payment_id);
+            tx_first_key_image,
+            tools::add_element(output_enote_proposals_out),
+            encrypted_payment_id);
 
-        // set pid to the first payment proposal or only integrated proposal
-        const bool is_first = i == 0;
+        // set pid_enc from integrated address proposal pic_enc
         const bool is_integrated = normal_payment_proposals[i].destination.payment_id != null_payment_id;
-        if (is_first || is_integrated)
+        if (is_integrated)
             encrypted_payment_id_out = encrypted_payment_id;
     }
 
-    // in the case that the pid target is ambiguous, set it to random bytes
-    const bool ambiguous_pid_destination = num_integrated == 0 && normal_payment_proposals.size() > 1;
-    if (ambiguous_pid_destination)
-        encrypted_payment_id_out = gen_payment_id();
+    // in the case that there is no required pid_enc, set it to the provided dummy
+    if (0 == num_integrated)
+    {
+        CHECK_AND_ASSERT_THROW_MES(dummy_encrypted_payment_id,
+            "get output enote proposals: missing encrypted payment ID: no integrated address nor provided dummy");
+        encrypted_payment_id_out = *dummy_encrypted_payment_id;
+    }
 
     // construct selfsend enotes, preferring internal enotes over special enotes when possible
     for (const CarrotPaymentProposalSelfSendV1 &selfsend_payment_proposal : selfsend_payment_proposals)
     {
+        const std::optional<mx25519_pubkey> other_enote_ephemeral_pubkey =
+            (num_proposals == 2 && output_enote_proposals_out.size())
+                ? output_enote_proposals_out.at(0).enote.enote_ephemeral_pubkey
+                : std::optional<mx25519_pubkey>{};
+
         if (s_view_balance_dev != nullptr)
         {
             get_output_proposal_internal_v1(selfsend_payment_proposal,
                 *s_view_balance_dev,
                 tx_first_key_image,
+                other_enote_ephemeral_pubkey,
                 tools::add_element(output_enote_proposals_out));
         }
         else if (k_view_dev != nullptr)
@@ -232,6 +244,7 @@ void get_output_enote_proposals(std::vector<CarrotPaymentProposalV1> &&normal_pa
                 *k_view_dev,
                 account_spend_pubkey,
                 tx_first_key_image,
+                other_enote_ephemeral_pubkey,
                 tools::add_element(output_enote_proposals_out));
         }
         else // neither k_v nor s_vb device passed
@@ -241,23 +254,50 @@ void get_output_enote_proposals(std::vector<CarrotPaymentProposalV1> &&normal_pa
         }
     }
 
-    // sort enotes by D_e and assert uniqueness properties of D_e
-    const auto sort_by_ephemeral_pubkey = [](const RCTOutputEnoteProposal &a, const RCTOutputEnoteProposal &b) -> bool
+    // assert uniqueness of D_e if >2-out, shared otherwise. also check D_e is not trivial
+    memcmp_set<mx25519_pubkey> ephemeral_pubkeys;
+    for (const RCTOutputEnoteProposal &p : output_enote_proposals_out)
     {
-        return memcmp(&a.enote.enote_ephemeral_pubkey,
-            &b.enote.enote_ephemeral_pubkey,
-            sizeof(crypto::x25519_pubkey)) < 0;
-    };
-    std::sort(output_enote_proposals_out.begin(), output_enote_proposals_out.end(), sort_by_ephemeral_pubkey);
-    const bool has_unique_ephemeral_pubkeys = tools::is_sorted_and_unique(output_enote_proposals_out,
-        sort_by_ephemeral_pubkey);
+        const bool trivial_enote_ephemeral_pubkey = memcmp(p.enote.enote_ephemeral_pubkey.data,
+            mx25519_pubkey{}.data,
+            sizeof(mx25519_pubkey)) == 0;
+        CHECK_AND_ASSERT_THROW_MES(!trivial_enote_ephemeral_pubkey,
+            "get output enote proposals: this set contains enote ephemeral pubkeys with x=0");
+        ephemeral_pubkeys.insert(p.enote.enote_ephemeral_pubkey);
+    }
+    const bool has_unique_ephemeral_pubkeys = ephemeral_pubkeys.size() == output_enote_proposals_out.size();
     CHECK_AND_ASSERT_THROW_MES(!(num_proposals == 2 && has_unique_ephemeral_pubkeys),
         "get output enote proposals: a 2-out set needs to share an ephemeral pubkey, but this 2-out set doesn't");
     CHECK_AND_ASSERT_THROW_MES(!(num_proposals != 2 && !has_unique_ephemeral_pubkeys),
         "get output enote proposals: this >2-out set contains duplicate enote ephemeral pubkeys");
 
-    // sort enotes by Ko
-    std::sort(output_enote_proposals_out.begin(), output_enote_proposals_out.end());
+    // sort enotes by K_o
+    const auto sort_output_enote_proposal = [](const RCTOutputEnoteProposal &a, const RCTOutputEnoteProposal &b)
+        -> bool { return a.enote.onetime_address < b.enote.onetime_address; };
+    std::sort(output_enote_proposals_out.begin(), output_enote_proposals_out.end(), sort_output_enote_proposal);
+
+    // assert uniqueness of K_o
+    CHECK_AND_ASSERT_THROW_MES(tools::is_sorted_and_unique(output_enote_proposals_out, sort_output_enote_proposal),
+        "get output enote proposals: this set contains duplicate onetime addresses");
+
+    // assert all K_o lie in prime order subgroup
+    for (const RCTOutputEnoteProposal &output_enote_proposal : output_enote_proposals_out)
+    {
+        CHECK_AND_ASSERT_THROW_MES(rct::isInMainSubgroup(rct::pk2rct(output_enote_proposal.enote.onetime_address)),
+            "get output enote proposals: this set contains an invalid onetime address");
+    }
+
+    // assert unique and non-trivial k_a
+    memcmp_set<crypto::secret_key> amount_blinding_factors;
+    for (const RCTOutputEnoteProposal &output_enote_proposal : output_enote_proposals_out)
+    {
+        CHECK_AND_ASSERT_THROW_MES(output_enote_proposal.amount_blinding_factor != crypto::null_skey,
+            "get output enote proposals: this set contains a trivial amount blinding factor");
+
+        amount_blinding_factors.insert(output_enote_proposal.amount_blinding_factor);
+    }
+    CHECK_AND_ASSERT_THROW_MES(amount_blinding_factors.size() == num_proposals,
+        "get output enote proposals: this set contains duplicate amount blinding factors");
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace carrot

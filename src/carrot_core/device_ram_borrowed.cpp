@@ -30,6 +30,7 @@
 #include "device_ram_borrowed.h"
 
 //local headers
+#include "address_utils.h"
 #include "enote_utils.h"
 #include "ringct/rctOps.h"
 
@@ -48,14 +49,14 @@ bool view_incoming_key_ram_borrowed_device::view_key_scalar_mult_ed25519(const c
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------
-bool view_incoming_key_ram_borrowed_device::view_key_8_scalar_mult_x25519(const crypto::x25519_pubkey &D,
-    crypto::x25519_pubkey &kv8D) const
+bool view_incoming_key_ram_borrowed_device::view_key_scalar_mult_x25519(const mx25519_pubkey &D,
+    mx25519_pubkey &kvD) const
 {
-    return make_carrot_uncontextualized_shared_key_receiver(m_k_view_incoming, D, kv8D);
+    return make_carrot_uncontextualized_shared_key_receiver(m_k_view_incoming, D, kvD);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void view_incoming_key_ram_borrowed_device::make_janus_anchor_special(
-    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
+    const mx25519_pubkey &enote_ephemeral_pubkey,
     const input_context_t &input_context,
     const crypto::public_key &onetime_address,
     const crypto::public_key &account_spend_pubkey,
@@ -77,7 +78,7 @@ void view_balance_secret_ram_borrowed_device::make_internal_view_tag(const input
 }
 //-------------------------------------------------------------------------------------------------------------------
 void view_balance_secret_ram_borrowed_device::make_internal_sender_receiver_secret(
-    const crypto::x25519_pubkey &enote_ephemeral_pubkey,
+    const mx25519_pubkey &enote_ephemeral_pubkey,
     const input_context_t &input_context,
     crypto::hash &s_sender_receiver_out) const
 {
@@ -85,6 +86,14 @@ void view_balance_secret_ram_borrowed_device::make_internal_sender_receiver_secr
         enote_ephemeral_pubkey,
         input_context,
         s_sender_receiver_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void generate_address_secret_ram_borrowed_device::make_index_extension_generator(
+    const std::uint32_t major_index,
+    const std::uint32_t minor_index,
+    crypto::secret_key &address_generator_out) const
+{
+    make_carrot_index_extension_generator(m_s_generate_address, major_index, minor_index, address_generator_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
 } //namespace carrot

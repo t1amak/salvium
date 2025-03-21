@@ -166,6 +166,15 @@ namespace cryptonote
       return false;
     }
 
+    // Reject ALL TXs except miner + protocol for v5
+    if (version == HF_VERSION_SHUTDOWN_USER_TXS) {
+      if (tx.type != cryptonote::transaction_type::MINER && tx.type != cryptonote::transaction_type::PROTOCOL) {
+        LOG_PRINT_L1("User TXs are not permitted for v" + std::to_string(HF_VERSION_SHUTDOWN_USER_TXS));
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+    }
+    
     if(!check_inputs_types_supported(tx))
     {
       tvc.m_verifivation_failed = true;
@@ -1613,7 +1622,7 @@ namespace cryptonote
   //---------------------------------------------------------------------------------
   //---------------------------------------------------------------------------------
   //TODO: investigate whether boolean return is appropriate
-  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version, oracle::pricing_record& pr, std::map<std::string, uint64_t>& circ_supply, std::vector<txpool_tx_meta_t>& protocol_metadata)
+  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version)
   {
     CRITICAL_REGION_LOCAL(m_transactions_lock);
     CRITICAL_REGION_LOCAL1(m_blockchain);
@@ -1652,6 +1661,12 @@ namespace cryptonote
         continue;
       }
 
+      // SRCG: skip all user TXs for HF 5 - when the node restarts, it'll discard them fully in `tx_memory_pool::validate()`
+      if (version == HF_VERSION_SHUTDOWN_USER_TXS) {
+        LOG_PRINT_L2("  User TXs forbidden by consensus for HF 5 - skipping");
+        continue;
+      }
+      
       LOG_PRINT_L2("Considering " << sorted_it->second << ", weight " << meta.weight << ", current block weight " << total_weight << "/" << max_total_weight << ", current coinbase " << print_money(best_coinbase) << ", relay method " << (unsigned)meta.get_relay_method());
 
       if (!meta.matches(relay_category::legacy) && !(m_mine_stem_txes && meta.get_relay_method() == relay_method::stem))
@@ -1743,14 +1758,6 @@ namespace cryptonote
         continue;
       }
 
-      // Check what the TX type is - only CONVERT needs a cash_value
-      if (meta.source_asset_id == meta.destination_asset_id) {
-        // TRANSFER
-      } else {
-        // BURN OR CONVERT (both require inclusion in the protocol_tx calculation for circ_supply purposes)
-        protocol_metadata.push_back(meta);
-      }
-      
       bl.tx_hashes.push_back(sorted_it->second);
       total_weight += meta.weight;
       fee += meta.fee;

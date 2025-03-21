@@ -46,7 +46,8 @@ extern "C" {
 }
 #include "crypto/generic-ops.h"
 #include "crypto/crypto.h"
-
+#include "fcmp_pp/fcmp_pp_types.h"
+#include "fcmp_pp/prove.h"
 #include "hex.h"
 #include "span.h"
 #include "memwipe.h"
@@ -55,6 +56,7 @@ extern "C" {
 #include "serialization/binary_archive.h"
 #include "serialization/json_archive.h"
 
+#include "cryptonote_protocol/enums.h"
 
 //Define this flag when debugging to get additional info on the console
 #ifdef DBG
@@ -85,10 +87,23 @@ namespace rct {
             return bytes[i];
         }
         bool operator==(const key &k) const { return !crypto_verify_32(bytes, k.bytes); }
+        bool operator!=(const key &k) const { return crypto_verify_32(bytes, k.bytes); }
         unsigned char bytes[32];
     };
     typedef std::vector<key> keyV; //vector of keys
     typedef std::vector<keyV> keyM; //matrix of keys (indexed by column first)
+
+    struct zk_proof {
+        key R; // Commitment
+        key z1; // Response
+        key z2; // Response
+
+        BEGIN_SERIALIZE_OBJECT()
+          FIELD(R)
+          FIELD(z1)
+          FIELD(z2)
+        END_SERIALIZE()
+    };
 
     //containers For CT operations
     //if it's  representing a private ctkey then "dest" contains the secret key of the address
@@ -254,7 +269,7 @@ namespace rct {
       rct::key r1, s1, d1;
       rct::keyV L, R;
 
-      BulletproofPlus() {}
+      BulletproofPlus(): V(), A(), A1(), B(), r1(), s1(), d1(), L(), R() {}
       BulletproofPlus(const rct::key &V, const rct::key &A, const rct::key &A1, const rct::key &B, const rct::key &r1, const rct::key &s1, const rct::key &d1, const rct::keyV &L, const rct::keyV &R):
         V({V}), A(A), A1(A1), B(B), r1(r1), s1(s1), d1(d1), L(L), R(R) {}
       BulletproofPlus(const rct::keyV &V, const rct::key &A, const rct::key &A1, const rct::key &B, const rct::key &r1, const rct::key &s1, const rct::key &d1, const rct::keyV &L, const rct::keyV &R):
@@ -304,6 +319,9 @@ namespace rct {
       RCTTypeBulletproof2 = 4,
       RCTTypeCLSAG = 5,
       RCTTypeBulletproofPlus = 6,
+      RCTTypeFullProofs = 7,
+      RCTTypeSalviumOne = 8,
+      RCTTypeSalviumTwo = 9,
     };
     enum RangeProofType { RangeProofBorromean, RangeProofBulletproof, RangeProofMultiOutputBulletproof, RangeProofPaddedBulletproof };
     struct RCTConfig {
@@ -316,6 +334,50 @@ namespace rct {
         VARINT_FIELD(bp_version)
       END_SERIALIZE()
     };
+
+    enum SalviumDataType { SalviumNormal=0, SalviumAudit=1 };
+    struct salvium_input_data_t {
+      crypto::key_derivation aR;
+      xmr_amount amount;
+      size_t i;
+      uint8_t origin_tx_type;
+      crypto::key_derivation aR_stake;
+      size_t i_stake;
+      
+      BEGIN_SERIALIZE_OBJECT()
+        FIELD(aR)
+        VARINT_FIELD(amount)
+        VARINT_FIELD(i)
+        VARINT_FIELD(origin_tx_type)
+        if (origin_tx_type != cryptonote::transaction_type::UNSET) {
+          FIELD(aR_stake)
+          FIELD(i_stake)
+        }
+      END_SERIALIZE()
+    };
+    struct salvium_data_t {
+
+      uint8_t salvium_data_type; // flag to indicate what type of data is valid
+      zk_proof pr_proof; // p_r 
+      zk_proof sa_proof; // spend authority proof
+      zk_proof cz_proof; // change is zero proof
+      std::vector<salvium_input_data_t> input_verification_data;
+      crypto::public_key spend_pubkey;
+      std::string enc_view_privkey_str;
+
+      BEGIN_SERIALIZE_OBJECT()
+        VARINT_FIELD(salvium_data_type)
+        FIELD(pr_proof)
+        FIELD(sa_proof)
+        if (salvium_data_type == SalviumAudit)
+        {
+          FIELD(cz_proof)
+          FIELD(input_verification_data)
+          FIELD(spend_pubkey)
+          FIELD(enc_view_privkey_str)
+        }
+      END_SERIALIZE()
+    };
     struct rctSigBase {
         uint8_t type;
         key message;
@@ -326,9 +388,10 @@ namespace rct {
         ctkeyV outPk;
         xmr_amount txnFee; // contains b
         key p_r;
+        salvium_data_t salvium_data;
 
         rctSigBase() :
-          type(RCTTypeNull), message{}, mixRing{}, pseudoOuts{}, ecdhInfo{}, outPk{}, txnFee(0)
+          type(RCTTypeNull), message{}, mixRing{}, pseudoOuts{}, ecdhInfo{}, outPk{}, txnFee(0), p_r{}, salvium_data{}
         {}
 
         template<bool W, template <bool> class Archive>
@@ -337,7 +400,7 @@ namespace rct {
           FIELD(type)
           if (type == RCTTypeNull)
             return ar.good();
-          if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2 && type != RCTTypeCLSAG && type != RCTTypeBulletproofPlus)
+          if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2 && type != RCTTypeCLSAG && type != RCTTypeBulletproofPlus && type != RCTTypeFullProofs && type != RCTTypeSalviumOne)
             return false;
           VARINT_FIELD(txnFee)
           // inputs/outputs not saved, only here for serialization help
@@ -366,7 +429,7 @@ namespace rct {
             return false;
           for (size_t i = 0; i < outputs; ++i)
           {
-            if (type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus)
+            if (type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne || type == RCTTypeSalviumTwo)
             {
               // Since RCTTypeBulletproof2 enote types, we don't serialize the blinding factor, and only serialize the
               // first 8 bytes of ecdhInfo[i].amount
@@ -403,6 +466,15 @@ namespace rct {
           }
           ar.end_array();
           FIELD(p_r)
+          if (type == RCTTypeSalviumOne || type == RCTTypeSalviumTwo)
+          {
+            FIELD(salvium_data)
+          }
+          else if (type == RCTTypeFullProofs)
+          {
+            FIELD(salvium_data.pr_proof)
+            FIELD(salvium_data.sa_proof)
+          }
           return ar.good();
         }
 
@@ -415,6 +487,15 @@ namespace rct {
           FIELD(outPk)
           VARINT_FIELD(txnFee)
           FIELD(p_r)
+          if (type == RCTTypeSalviumOne || type == RCTTypeSalviumTwo)
+          {
+            FIELD(salvium_data)
+          }
+          else if (type == RCTTypeFullProofs)
+          {
+            FIELD(salvium_data.pr_proof)
+            FIELD(salvium_data.sa_proof)
+          }
         END_SERIALIZE()
     };
     struct rctSigPrunable {
@@ -424,6 +505,11 @@ namespace rct {
         std::vector<mgSig> MGs; // simple rct has N, full has 1
         std::vector<clsag> CLSAGs;
         keyV pseudoOuts; //C - for simple rct
+        // FCMP data
+        uint64_t reference_block; // used to get the tree root as of when this reference block index enters the chain
+        uint8_t n_tree_layers; // number of layers in the tree as of the block when the reference block index enters the chain
+        fcmp_pp::FcmpPpProof fcmp_pp; // FCMP++ SAL and membership proof
+        fcmp_pp::FcmpVerifyHelperData fcmp_ver_helper_data; // used to verify FCMP proofs (not serialized, reconstructed)
 
         // when changing this function, update cryptonote::get_pruned_transaction_weight
         template<bool W, template <bool> class Archive>
@@ -437,9 +523,9 @@ namespace rct {
             return false;
           if (type == RCTTypeNull)
             return ar.good();
-          if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2 && type != RCTTypeCLSAG && type != RCTTypeBulletproofPlus)
+          if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2 && type != RCTTypeCLSAG && type != RCTTypeBulletproofPlus && type != RCTTypeFullProofs && type != RCTTypeSalviumOne && type != RCTTypeSalviumTwo)
             return false;
-          if (type == RCTTypeBulletproofPlus)
+          if (type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne || type == RCTTypeSalviumTwo)
           {
             uint32_t nbp = bulletproofs_plus.size();
             VARINT_FIELD(nbp)
@@ -496,7 +582,25 @@ namespace rct {
             ar.end_array();
           }
 
-          if (type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus)
+          if (type == RCTTypeSalviumTwo)
+          {
+            VARINT_FIELD(reference_block)
+            // n_tree_layers can be inferred from the reference_block, however, if we didn't save n_tree_layers on the
+            // tx, we would need a db read (for n_tree_layers as of the block) in order to de-serialize the FCMP++ proof
+            VARINT_FIELD(n_tree_layers)
+            ar.tag("fcmp_pp");
+            ar.begin_object();
+            const std::size_t proof_len = fcmp_pp::proof_len(inputs, n_tree_layers);
+            if (!typename Archive<W>::is_saving())
+              fcmp_pp.resize(proof_len);
+            if (fcmp_pp.size() != proof_len)
+              return false;
+            ar.serialize_blob(fcmp_pp.data(), proof_len);
+            if (!ar.good())
+              return false;
+            ar.end_object();
+          }
+          else if (type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne)
           {
             ar.tag("CLSAGs");
             ar.begin_array();
@@ -587,7 +691,7 @@ namespace rct {
             }
             ar.end_array();
           }
-          if (type == RCTTypeBulletproof || type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus)
+          if (type == RCTTypeBulletproof || type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne || type == RCTTypeSalviumTwo)
           {
             ar.tag("pseudoOuts");
             ar.begin_array();
@@ -611,6 +715,9 @@ namespace rct {
           FIELD(bulletproofs_plus)
           FIELD(MGs)
           FIELD(CLSAGs)
+          VARINT_FIELD(reference_block)
+          VARINT_FIELD(n_tree_layers)
+          FIELD(fcmp_pp)
           FIELD(pseudoOuts)
         END_SERIALIZE()
     };
@@ -619,12 +726,12 @@ namespace rct {
 
         keyV& get_pseudo_outs()
         {
-          return type == RCTTypeBulletproof || type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus ? p.pseudoOuts : pseudoOuts;
+          return type == RCTTypeBulletproof || type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne || type == RCTTypeSalviumTwo ? p.pseudoOuts : pseudoOuts;
         }
 
         keyV const& get_pseudo_outs() const
         {
-          return type == RCTTypeBulletproof || type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus ? p.pseudoOuts : pseudoOuts;
+          return type == RCTTypeBulletproof || type == RCTTypeBulletproof2 || type == RCTTypeCLSAG || type == RCTTypeBulletproofPlus || type == RCTTypeFullProofs || type == RCTTypeSalviumOne || type == RCTTypeSalviumTwo ? p.pseudoOuts : pseudoOuts;
         }
 
         BEGIN_SERIALIZE_OBJECT()
@@ -739,15 +846,19 @@ namespace rct {
     bool is_rct_bulletproof_plus(int type);
     bool is_rct_borromean(int type);
     bool is_rct_clsag(int type);
+    bool is_rct_short_amount(int type);
+    bool is_rct_fcmp(int type);
 
     static inline const rct::key &pk2rct(const crypto::public_key &pk) { return (const rct::key&)pk; }
     static inline const rct::key &sk2rct(const crypto::secret_key &sk) { return (const rct::key&)sk; }
     static inline const rct::key &ki2rct(const crypto::key_image &ki) { return (const rct::key&)ki; }
     static inline const rct::key &hash2rct(const crypto::hash &h) { return (const rct::key&)h; }
+    static inline const rct::key &pt2rct(const crypto::ec_point &pt) { return (const rct::key&)pt; }
     static inline const crypto::public_key &rct2pk(const rct::key &k) { return (const crypto::public_key&)k; }
     static inline const crypto::secret_key &rct2sk(const rct::key &k) { return (const crypto::secret_key&)k; }
     static inline const crypto::key_image &rct2ki(const rct::key &k) { return (const crypto::key_image&)k; }
     static inline const crypto::hash &rct2hash(const rct::key &k) { return (const crypto::hash&)k; }
+    static inline const crypto::ec_point &rct2pt(const rct::key &k) { return (const crypto::ec_point&)k; }
     static inline bool operator==(const rct::key &k0, const crypto::public_key &k1) { return !crypto_verify_32(k0.bytes, (const unsigned char*)&k1); }
     static inline bool operator!=(const rct::key &k0, const crypto::public_key &k1) { return crypto_verify_32(k0.bytes, (const unsigned char*)&k1); }
 }
@@ -775,7 +886,7 @@ namespace std
 BLOB_SERIALIZER(rct::key);
 BLOB_SERIALIZER(rct::key64);
 BLOB_SERIALIZER(rct::ctkey);
-BLOB_SERIALIZER(rct::multisig_kLRki);
+BLOB_SERIALIZER_FORCED(rct::multisig_kLRki);
 BLOB_SERIALIZER(rct::boroSig);
 
 VARIANT_TAG(debug_archive, rct::key, "rct::key");
@@ -795,6 +906,9 @@ VARIANT_TAG(debug_archive, rct::multisig_kLRki, "rct::multisig_kLRki");
 VARIANT_TAG(debug_archive, rct::multisig_out, "rct::multisig_out");
 VARIANT_TAG(debug_archive, rct::clsag, "rct::clsag");
 VARIANT_TAG(debug_archive, rct::BulletproofPlus, "rct::bulletproof_plus");
+VARIANT_TAG(debug_archive, rct::zk_proof, "rct::zk_proof");
+VARIANT_TAG(debug_archive, rct::salvium_input_data_t, "rct::salvium_input_data");
+VARIANT_TAG(debug_archive, rct::salvium_data_t, "rct::salvium_data");
 
 VARIANT_TAG(binary_archive, rct::key, 0x90);
 VARIANT_TAG(binary_archive, rct::key64, 0x91);
@@ -813,6 +927,9 @@ VARIANT_TAG(binary_archive, rct::multisig_kLRki, 0x9d);
 VARIANT_TAG(binary_archive, rct::multisig_out, 0x9e);
 VARIANT_TAG(binary_archive, rct::clsag, 0x9f);
 VARIANT_TAG(binary_archive, rct::BulletproofPlus, 0xa0);
+VARIANT_TAG(binary_archive, rct::zk_proof, 0xa1);
+VARIANT_TAG(binary_archive, rct::salvium_input_data_t, 0xa2);
+VARIANT_TAG(binary_archive, rct::salvium_data_t, 0xa3);
 
 VARIANT_TAG(json_archive, rct::key, "rct_key");
 VARIANT_TAG(json_archive, rct::key64, "rct_key64");
@@ -831,5 +948,8 @@ VARIANT_TAG(json_archive, rct::multisig_kLRki, "rct_multisig_kLR");
 VARIANT_TAG(json_archive, rct::multisig_out, "rct_multisig_out");
 VARIANT_TAG(json_archive, rct::clsag, "rct_clsag");
 VARIANT_TAG(json_archive, rct::BulletproofPlus, "rct_bulletproof_plus");
+VARIANT_TAG(json_archive, rct::zk_proof, "rct_zk_proof");
+VARIANT_TAG(json_archive, rct::salvium_input_data_t, "rct_salvium_input_data");
+VARIANT_TAG(json_archive, rct::salvium_data_t, "rct_salvium_data");
 
 #endif  /* RCTTYPES_H */

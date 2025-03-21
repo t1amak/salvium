@@ -48,9 +48,7 @@ extern "C" {
 }
 #include "crypto/crypto.h"
 
-#include "cryptonote_basic/cryptonote_basic.h"
-#include "cryptonote_protocol/enums.h"
-
+#include "fcmp_pp/curve_trees.h"
 #include "rctTypes.h"
 #include "rctOps.h"
 
@@ -67,6 +65,10 @@ namespace hw {
 
 
 namespace rct {
+    // helpers for mock txs
+    Bulletproof make_dummy_bulletproof(const std::vector<uint64_t> &outamounts, keyV &C, keyV &masks);
+    BulletproofPlus make_dummy_bulletproof_plus(const std::vector<uint64_t> &outamounts, keyV &C, keyV &masks);
+    clsag make_dummy_clsag(size_t ring_size);
 
     boroSig genBorromean(const key64 x, const key64 P1, const key64 P2, const bits indices);
     bool verifyBorromean(const boroSig &bb, const key64 P1, const key64 P2);
@@ -85,6 +87,12 @@ namespace rct {
     clsag proveRctCLSAGSimple(const key &, const ctkeyV &, const ctkey &, const key &, const key &, unsigned int, hw::device &);
     bool verRctCLSAGSimple(const key &, const clsag &, const ctkeyV &, const key &);
 
+    zk_proof PRProof_Gen(const rct::key &difference);
+    bool PRProof_Ver(const rct::key &C, const zk_proof &proof);
+  
+    zk_proof SAProof_Gen(const key &P, const key &x_change, const key &key_yF);
+    bool SAProof_Ver(const zk_proof &proof, const key &P, const key &key_yF);
+  
     //proveRange and verRange
     //proveRange gives C, and mask such that \sumCi = C
     //   c.f. https://eprint.iacr.org/2015/1098 section 5.1
@@ -139,10 +147,16 @@ namespace rct {
         const std::vector<xmr_amount> & inamounts,
         const std::vector<xmr_amount> & outamounts,
         const keyV &amount_keys,
+        const std::vector<FcmpRerandomizedOutputCompressed> rerandomized_outputs,
+        const fcmp_pp::ProofParams &fcmp_pp_params,
         xmr_amount txnFee,
         unsigned int mixin,
         const RCTConfig &rct_config,
-        hw::device &hwdev
+        hw::device &hwdev,
+        const rct::salvium_data_t &salvium_data,
+        const key &x_change = rct::zero(),
+        const size_t change_index = 0,
+        const key &key_yF = rct::zero()
     );
     rctSig genRctSimple(
         const key & message,
@@ -156,10 +170,16 @@ namespace rct {
         xmr_amount txnFee,
         const ctkeyM & mixRing,
         const keyV &amount_keys,
+        const std::vector<FcmpRerandomizedOutputCompressed> rerandomized_outputs,
+        const fcmp_pp::ProofParams &fcmp_pp_params,
         const std::vector<unsigned int> & index,
         ctkeyV &outSk,
         const RCTConfig &rct_config,
-        hw::device &hwdev
+        hw::device &hwdev,
+        const rct::salvium_data_t &salvium_data,
+        const key &x_change = rct::zero(),
+        const size_t change_index = 0,
+        const key &key_yF = rct::zero()
     );
     bool verRct(const rctSig & rv, bool semantics);
     static inline bool verRct(const rctSig & rv) { return verRct(rv, true) && verRct(rv, false); }

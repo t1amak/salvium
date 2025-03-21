@@ -134,8 +134,8 @@ namespace boost
     a & x.key;
     a & x.asset_type;
     a & x.unlock_time;
-    a & x.anchor;
     a & x.view_tag;
+    a & x.encrypted_janus_anchor;
   }
 
   template <class Archive>
@@ -372,6 +372,36 @@ namespace boost
   }
 
   template <class Archive>
+  inline void serialize(Archive &a, rct::zk_proof &x, const boost::serialization::version_type ver)
+  {
+    a & x.R;
+    a & x.z1;
+    a & x.z2;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, rct::salvium_input_data_t &x, const boost::serialization::version_type ver)
+  {
+    a & x.aR;
+    a & x.i;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, rct::salvium_data_t &x, const boost::serialization::version_type ver)
+  {
+    a & x.salvium_data_type;
+    a & x.pr_proof;
+    a & x.sa_proof;
+    if (x.salvium_data_type == rct::SalviumAudit)
+    {
+      a & x.cz_proof;
+      a & x.input_verification_data;
+      a & x.spend_pubkey;
+      a & x.enc_view_privkey_str;
+    }
+  }
+
+  template <class Archive>
   inline void serialize(Archive &a, rct::ecdhTuple &x, const boost::serialization::version_type ver)
   {
     a & x.mask;
@@ -424,7 +454,7 @@ namespace boost
     a & x.type;
     if (x.type == rct::RCTTypeNull)
       return;
-    if (x.type != rct::RCTTypeFull && x.type != rct::RCTTypeSimple && x.type != rct::RCTTypeBulletproof && x.type != rct::RCTTypeBulletproof2 && x.type != rct::RCTTypeCLSAG && x.type != rct::RCTTypeBulletproofPlus)
+    if (x.type != rct::RCTTypeFull && x.type != rct::RCTTypeSimple && x.type != rct::RCTTypeBulletproof && x.type != rct::RCTTypeBulletproof2 && x.type != rct::RCTTypeCLSAG && x.type != rct::RCTTypeBulletproofPlus && x.type != rct::RCTTypeFullProofs && x.type != rct::RCTTypeSalviumOne)
       throw boost::archive::archive_exception(boost::archive::archive_exception::other_exception, "Unsupported rct type");
     // a & x.message; message is not serialized, as it can be reconstructed from the tx data
     // a & x.mixRing; mixRing is not serialized, as it can be reconstructed from the offsets
@@ -434,6 +464,12 @@ namespace boost
     serializeOutPk(a, x.outPk, ver);
     a & x.txnFee;
     a & x.p_r;
+    if (x.type == rct::RCTTypeSalviumOne) {
+      a & x.salvium_data;
+    } else if (x.type == rct::RCTTypeFullProofs) {
+      a & x.salvium_data.pr_proof;
+      a & x.salvium_data.sa_proof;
+    }
   }
 
   template <class Archive>
@@ -459,7 +495,7 @@ namespace boost
     a & x.type;
     if (x.type == rct::RCTTypeNull)
       return;
-    if (x.type != rct::RCTTypeFull && x.type != rct::RCTTypeSimple && x.type != rct::RCTTypeBulletproof && x.type != rct::RCTTypeBulletproof2 && x.type != rct::RCTTypeCLSAG && x.type != rct::RCTTypeBulletproofPlus)
+    if (x.type != rct::RCTTypeFull && x.type != rct::RCTTypeSimple && x.type != rct::RCTTypeBulletproof && x.type != rct::RCTTypeBulletproof2 && x.type != rct::RCTTypeCLSAG && x.type != rct::RCTTypeBulletproofPlus && x.type != rct::RCTTypeFullProofs && x.type != rct::RCTTypeSalviumOne)
       throw boost::archive::archive_exception(boost::archive::archive_exception::other_exception, "Unsupported rct type");
     // a & x.message; message is not serialized, as it can be reconstructed from the tx data
     // a & x.mixRing; mixRing is not serialized, as it can be reconstructed from the offsets
@@ -469,6 +505,12 @@ namespace boost
     serializeOutPk(a, x.outPk, ver);
     a & x.txnFee;
     a & x.p_r;
+    if (x.type == rct::RCTTypeSalviumOne) {
+      a & x.salvium_data;
+    } else if (x.type == rct::RCTTypeFullProofs) {
+      a & x.salvium_data.pr_proof;
+      a & x.salvium_data.sa_proof;
+    }
     //--------------
     a & x.p.rangeSigs;
     if (x.p.rangeSigs.empty())
@@ -480,7 +522,7 @@ namespace boost
     a & x.p.MGs;
     if (ver >= 1u)
       a & x.p.CLSAGs;
-    if (x.type == rct::RCTTypeBulletproof || x.type == rct::RCTTypeBulletproof2 || x.type == rct::RCTTypeCLSAG || x.type == rct::RCTTypeBulletproofPlus)
+    if (x.type == rct::RCTTypeBulletproof || x.type == rct::RCTTypeBulletproof2 || x.type == rct::RCTTypeCLSAG || x.type == rct::RCTTypeBulletproofPlus || x.type == rct::RCTTypeFullProofs || x.type == rct::RCTTypeSalviumOne)
       a & x.p.pseudoOuts;
   }
 
@@ -522,5 +564,5 @@ namespace boost
 }
 
 BOOST_CLASS_VERSION(rct::rctSigPrunable, 2)
-BOOST_CLASS_VERSION(rct::rctSig, 2)
+BOOST_CLASS_VERSION(rct::rctSig, 4)
 BOOST_CLASS_VERSION(rct::multisig_out, 1)

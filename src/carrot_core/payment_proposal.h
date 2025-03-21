@@ -38,10 +38,12 @@
 #include "destination.h"
 #include "device.h"
 #include "ringct/rctTypes.h"
+#include "common/variant.h"
 
 //third party headers
 
 //standard headers
+#include <optional>
 
 //forward declarations
 
@@ -94,8 +96,10 @@ struct CarrotPaymentProposalSelfSendV1 final
 
     /// enote_type
     CarrotEnoteType enote_type;
-    /// enote ephemeral pubkey: xr G
-    crypto::x25519_pubkey enote_ephemeral_pubkey;
+    /// enote ephemeral pubkey: D_e
+    std::optional<mx25519_pubkey> enote_ephemeral_pubkey;
+    /// anchor: arbitrary, pre-encrypted message for _internal_ selfsends
+    std::optional<janus_anchor_t> internal_message;
 };
 
 struct RCTOutputEnoteProposal
@@ -137,7 +141,7 @@ bool get_return_address_f_point(const crypto::hash &s_sender_receiver,
 * param: input_context -
 * return: D_e
 */
-crypto::x25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalV1 &proposal,
+mx25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalV1 &proposal,
     const input_context_t &input_context);
 /**
 * brief: get_enote_ephemeral_pubkey - get the proposal's enote ephemeral pubkey D_e
@@ -145,7 +149,7 @@ crypto::x25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalV1 &
 * param: input_context -
 * return: D_e
 */
-crypto::x25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalReturnV1 &proposal,
+mx25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalReturnV1 &proposal,
     const input_context_t &input_context);
 /**
 * brief: get_coinbase_output_proposal_v1 - convert the carrot proposal to a coinbase output proposal
@@ -155,6 +159,16 @@ crypto::x25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalRetu
 * outparam: partial_memo_out -
 */
 void get_coinbase_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
+    const std::uint64_t block_index,
+    CarrotCoinbaseEnoteV1 &output_enote_out);
+/**
+* brief: get_protocol_output_proposal_v1 - convert the carrot proposal to a protocol_tx output proposal
+* param: proposal -
+* param: block_index - index of the coinbase tx's block
+* outparam: output_enote_out -
+* outparam: partial_memo_out -
+*/
+void get_protocol_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
     const std::uint64_t block_index,
     CarrotCoinbaseEnoteV1 &output_enote_out);
 /**
@@ -188,12 +202,14 @@ void get_output_proposal_return_v1(const CarrotPaymentProposalReturnV1 &proposal
 * param: k_view_dev -
 * param: account_spend_pubkey -
 * param: tx_first_key_image -
+* param: other_enote_ephemeral_pubkey -
 * outparam: output_enote_out -
 */
 void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &proposal,
     const view_incoming_key_device &k_view_dev,
     const crypto::public_key &account_spend_pubkey,
     const crypto::key_image &tx_first_key_image,
+    const std::optional<mx25519_pubkey> &other_enote_ephemeral_pubkey,
     RCTOutputEnoteProposal &output_enote_out);
 /**
 * brief: get_output_proposal_internal_v1 - convert the carrot proposal to an output proposal (internal)
@@ -201,12 +217,13 @@ void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &propo
 * param: s_view_balance_dev -
 * param: account_spend_pubkey -
 * param: tx_first_key_image -
+* param: other_enote_ephemeral_pubkey -
 * outparam: output_enote_out -
-* outparam: partial_memo_out -
 */
 void get_output_proposal_internal_v1(const CarrotPaymentProposalSelfSendV1 &proposal,
     const view_balance_secret_device &s_view_balance_dev,
     const crypto::key_image &tx_first_key_image,
+    const std::optional<mx25519_pubkey> &other_enote_ephemeral_pubkey,
     RCTOutputEnoteProposal &output_enote_out);
 /**
 * brief: gen_jamtis_payment_proposal_v1 - generate a random proposal

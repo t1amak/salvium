@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023, The Monero Project
+// Copyright (c) 2017-2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -339,6 +339,71 @@ static rct::keyV vector_dup(const rct::key &x, size_t N)
   return rct::keyV(N, x);
 }
 
+/*
+static rct::key sm(rct::key y, int n, const rct::key &x)
+{
+  while (n--)
+    sc_mul(y.bytes, y.bytes, y.bytes);
+  sc_mul(y.bytes, y.bytes, x.bytes);
+  return y;
+}
+*/
+/* Compute the inverse of a scalar, the clever way */
+/*
+static rct::key invert(const rct::key &x)
+{
+  rct::key _1, _10, _100, _11, _101, _111, _1001, _1011, _1111;
+
+  _1 = x;
+  sc_mul(_10.bytes, _1.bytes, _1.bytes);
+  sc_mul(_100.bytes, _10.bytes, _10.bytes);
+  sc_mul(_11.bytes, _10.bytes, _1.bytes);
+  sc_mul(_101.bytes, _10.bytes, _11.bytes);
+  sc_mul(_111.bytes, _10.bytes, _101.bytes);
+  sc_mul(_1001.bytes, _10.bytes, _111.bytes);
+  sc_mul(_1011.bytes, _10.bytes, _1001.bytes);
+  sc_mul(_1111.bytes, _100.bytes, _1011.bytes);
+
+  rct::key inv;
+  sc_mul(inv.bytes, _1111.bytes, _1.bytes);
+
+  inv = sm(inv, 123 + 3, _101);
+  inv = sm(inv, 2 + 2, _11);
+  inv = sm(inv, 1 + 4, _1111);
+  inv = sm(inv, 1 + 4, _1111);
+  inv = sm(inv, 4, _1001);
+  inv = sm(inv, 2, _11);
+  inv = sm(inv, 1 + 4, _1111);
+  inv = sm(inv, 1 + 3, _101);
+  inv = sm(inv, 3 + 3, _101);
+  inv = sm(inv, 3, _111);
+  inv = sm(inv, 1 + 4, _1111);
+  inv = sm(inv, 2 + 3, _111);
+  inv = sm(inv, 2 + 2, _11);
+  inv = sm(inv, 1 + 4, _1011);
+  inv = sm(inv, 2 + 4, _1011);
+  inv = sm(inv, 6 + 4, _1001);
+  inv = sm(inv, 2 + 2, _11);
+  inv = sm(inv, 3 + 2, _11);
+  inv = sm(inv, 3 + 2, _11);
+  inv = sm(inv, 1 + 4, _1001);
+  inv = sm(inv, 1 + 3, _111);
+  inv = sm(inv, 2 + 4, _1111);
+  inv = sm(inv, 1 + 4, _1011);
+  inv = sm(inv, 3, _101);
+  inv = sm(inv, 2 + 4, _1111);
+  inv = sm(inv, 3, _101);
+  inv = sm(inv, 1 + 2, _11);
+
+#ifdef DEBUG_BP
+  rct::key tmp;
+  sc_mul(tmp.bytes, inv.bytes, x.bytes);
+  CHECK_AND_ASSERT_THROW_MES(tmp == rct::identity(), "invert failed");
+#endif
+  return inv;
+}
+*/
+
 static rct::keyV invert(rct::keyV x)
 {
   rct::keyV scratch;
@@ -354,7 +419,7 @@ static rct::keyV invert(rct::keyV x)
       sc_mul(acc.bytes, acc.bytes, x[n].bytes);
   }
 
-  acc = rct::invert(acc);
+  acc = invert(acc);
 
   rct::key tmp;
   for (int i = x.size(); i-- > 0; )
@@ -638,7 +703,7 @@ try_again:
   std::vector<ge_p3> Hprime(MN);
   rct::keyV aprime(MN);
   rct::keyV bprime(MN);
-  const rct::key yinv = rct::invert(y);
+  const rct::key yinv = invert(y);
   rct::keyV yinvpow(MN);
   yinvpow[0] = rct::identity();
   yinvpow[1] = yinv;
@@ -688,7 +753,7 @@ try_again:
     }
 
     // PAPER LINES 29-30
-    const rct::key winv = rct::invert(w[round]);
+    const rct::key winv = invert(w[round]);
     if (nprime > 1)
     {
       PERF_TIMER_START_BP(PROVE_hadamard2);

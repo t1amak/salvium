@@ -114,6 +114,7 @@ static bool compute_keys_for_sources(
     cryptonote::origin_data origin_tx_data;
     */
     bool use_origin_data = (src.origin_tx_data.tx_type != cryptonote::transaction_type::UNSET);
+    rct::salvium_input_data_t sid;
 
     if (not cryptonote::generate_key_image_helper(
       account_keys,
@@ -126,7 +127,8 @@ static bool compute_keys_for_sources(
       tmp_key_image,
       hwdev,
       use_origin_data,
-      src.origin_tx_data
+      src.origin_tx_data,
+      sid
     )) {
       return false;
     }
@@ -482,6 +484,9 @@ static bool compute_keys_for_destinations(
     if (destinations[i].is_change) {
       found_change = true;
       change_index = output_index; // Store the change_index - we will need this
+
+      // Calculate the change spend key (x_change)
+      
     }    
     output_index++;
   }
@@ -605,6 +610,8 @@ static void make_new_range_proofs(const int bp_version,
     sigs.bulletproofs.push_back(rct::bulletproof_PROVE(output_amounts, output_amount_masks));
   else if (bp_version == 4)
     sigs.bulletproofs_plus.push_back(rct::bulletproof_plus_PROVE(output_amounts, output_amount_masks));
+  else if (bp_version == 5)
+    sigs.bulletproofs_plus.push_back(rct::bulletproof_plus_PROVE(output_amounts, output_amount_masks));
 }
 //----------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------
@@ -635,6 +642,12 @@ static bool try_reconstruct_range_proofs(const int bp_version,
     return rct::bulletproof_VERIFY(reconstructed_sigs.bulletproofs);
   }
   else if (bp_version == 4)
+  {
+    if (not try_reconstruct_range_proofs(original_sigs.bulletproofs_plus, reconstructed_sigs.bulletproofs_plus))
+      return false;
+    return rct::bulletproof_plus_VERIFY(reconstructed_sigs.bulletproofs_plus);
+  }
+  else if (bp_version == 5)
   {
     if (not try_reconstruct_range_proofs(original_sigs.bulletproofs_plus, reconstructed_sigs.bulletproofs_plus))
       return false;
@@ -757,11 +770,15 @@ static bool set_tx_rct_signatures(
   const bool reconstruction,
   cryptonote::transaction& unsigned_tx,
   std::vector<CLSAG_context_t>& CLSAG_contexts,
-  rct::keyV& cached_w
+  rct::keyV& cached_w,
+  const uint8_t change_index,
+  const rct::key& x_change,
+  const rct::key& hs_yF
 )
 {
   if (rct_config.bp_version != 3 &&
-      rct_config.bp_version != 4)
+      rct_config.bp_version != 4 &&
+      rct_config.bp_version != 5)
     return false;
   if (rct_config.range_proof_type != rct::RangeProofPaddedBulletproof)
     return false;
@@ -777,6 +794,8 @@ static bool set_tx_rct_signatures(
     rv.type = rct::RCTTypeCLSAG;
   else if (rct_config.bp_version == 4)
     rv.type = rct::RCTTypeBulletproofPlus;
+  else if (rct_config.bp_version == 5)
+    rv.type = rct::RCTTypeFullProofs;
   else
     return false;
   rv.txnFee = fee;
@@ -854,11 +873,39 @@ static bool set_tx_rct_signatures(
     }
     sc_sub(difference.bytes, sumpouts.bytes, sumouts.bytes);
     rct::genC(rv.p_r, difference, 0);
+    if (rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumOne) {
+      rv.salvium_data.pr_proof = rct::PRProof_Gen(difference);
+#ifdef DBG
+      CHECK_AND_ASSERT_THROW_MES(rct::PRProof_Ver(rv.p_r, rv.salvium_data.pr_proof), "PRProof_Ver() failed on recently created proof");
+#endif
+    }
+
+    /*
+    // Check if spend authority proof is needed (only for TRANSFER TXs)
+    if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER && rv.type >= rct::RCTTypeFullProofs) {
+      rv.salvium_data.sa_proof = rct::SAProof_Gen(output_public_keys[change_index], x_change, hs_yF);
+#ifdef DBG
+      CHECK_AND_ASSERT_THROW_MES(rct::SAProof_Ver(rv.salvium_data.sa_proof, output_public_keys[change_index], hs_yF), "SAProof_Ver() failed on recently created proof");
+#endif
+    }
+    */
   }
   // check balance if reconstructing the tx
   else {
     rv.p.pseudoOuts = unsigned_tx.rct_signatures.p.pseudoOuts;
-    rv.p_r = unsigned_tx.rct_signatures.p_r;
+    if (rv.type == rct::RCTTypeFullProofs || rv.type == rct::RCTTypeSalviumOne) {
+      if (!rct::PRProof_Ver(unsigned_tx.rct_signatures.p_r, unsigned_tx.rct_signatures.salvium_data.pr_proof))
+        return false;
+      rv.p_r = unsigned_tx.rct_signatures.p_r;
+      rv.salvium_data.pr_proof = unsigned_tx.rct_signatures.salvium_data.pr_proof;
+      /*
+      if (!rct::SAProof_Ver(unsigned_tx.rct_signatures.salvium_data.sa_proof, output_public_keys[change_index], hs_yF))
+        return false;
+      rv.salvium_data.sa_proof = unsigned_tx.rct_signatures.salvium_data.sa_proof; // should verify this during reconstruction
+      */
+    } else {
+      rv.p_r = unsigned_tx.rct_signatures.p_r;
+    }
     if (num_sources != rv.p.pseudoOuts.size())
       return false;
     rct::key balance_accumulator = rct::scalarmultH(rct::d2h(fee));
@@ -1103,6 +1150,8 @@ bool tx_builder_ringct_t::init(
   // Check that the change element was found
   if (!found_change)
     return false;
+
+  // 
   
   // add inputs to tx
   set_tx_inputs(sources, unsigned_tx);
@@ -1117,6 +1166,8 @@ bool tx_builder_ringct_t::init(
   if (not set_tx_outputs_result)
     return false;
 
+  rct::key hs_yF;
+  rct::key x_change;
   if (hf_version >= HF_VERSION_ENABLE_N_OUTS && unsigned_tx.type == cryptonote::transaction_type::TRANSFER) {
     
     // Get the output public key for the change output
@@ -1152,6 +1203,7 @@ bool tx_builder_ringct_t::init(
       rct::key key_F         = rct::scalarmultKey(key_aP_change, key_inv_y);
       rct::key key_verify    = rct::scalarmultKey(key_F, key_y);
       CHECK_AND_ASSERT_MES(key_verify == key_aP_change, false, "at get_return_address: failed to verify invert() function with smK() approach");
+      hs_yF = rct::hash_to_scalar(key_verify);
 
       // Push the F point into the TX vector of F points
       if (not reconstruction)
@@ -1172,6 +1224,38 @@ bool tx_builder_ringct_t::init(
         unsigned_tx.return_address_change_mask.push_back(eci_data);
     }
 
+    if (hf_version >= HF_VERSION_FULL_PROOFS) {
+
+      // Get the secret spend key for the change element
+      crypto::secret_key spend_skey = crypto::null_skey;
+      for (const auto &multisig_key : account_keys.m_multisig_keys) {
+        sc_add((unsigned char*)spend_skey.data,
+               (const unsigned char*)multisig_key.data,
+               (const unsigned char*)spend_skey.data);
+      }
+      
+      // Calculate z_i (the shared secret between sender and ourselves for the original TX)
+      crypto::public_key txkey_pub = crypto::null_pkey; // R
+      const std::vector<crypto::public_key> in_additional_tx_pub_keys = cryptonote::get_additional_tx_pub_keys_from_extra(unsigned_tx);
+      if (in_additional_tx_pub_keys.size() != 0) {
+        CHECK_AND_ASSERT_MES(in_additional_tx_pub_keys.size() == unsigned_tx.vout.size(), false, "incorrect number of additional TX pubkeys in origin TX for return_payment");
+        txkey_pub = in_additional_tx_pub_keys[change_index];
+      } else {
+        txkey_pub = cryptonote::get_tx_pub_key_from_extra(unsigned_tx);
+      }
+      
+      // Obtain a separate key_derivation for the P_change output
+      //    (using the TX public key and the sender's private view key)
+      hw::device &hwdev = account_keys.get_device();
+      crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+      CHECK_AND_ASSERT_MES(hwdev.generate_key_derivation(txkey_pub, account_keys.m_view_secret_key, derivation), false, "Failed to generate key_derivation for P_change");
+        
+      // Calculate the secret spend key "x_change" for the P_change output
+      crypto::secret_key s_change = crypto::null_skey;
+      CHECK_AND_ASSERT_MES(hwdev.derive_secret_key(derivation, change_index, spend_skey, s_change), false, "Failed to derive secret key for P_change");
+      x_change = rct::sk2rct(s_change);
+    }
+
   } else if (unsigned_tx.type == cryptonote::transaction_type::TRANSFER || unsigned_tx.type == cryptonote::transaction_type::STAKE) {
 
     // Get the tx public key
@@ -1184,7 +1268,7 @@ bool tx_builder_ringct_t::init(
 
   // prepare input signatures
   if (not set_tx_rct_signatures(fee, sources, destination_amounts, input_secret_keys, output_public_keys, output_amount_secret_keys,
-      rct_config, reconstruction, unsigned_tx, CLSAG_contexts, cached_w))
+                                rct_config, reconstruction, unsigned_tx, CLSAG_contexts, cached_w, change_index, x_change, hs_yF))
     return false;
 
   initialized = true;

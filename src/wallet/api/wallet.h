@@ -112,8 +112,8 @@ public:
     void setTrustedDaemon(bool arg) override;
     bool trustedDaemon() const override;
     bool setProxy(const std::string &address) override;
-    uint64_t balance(uint32_t accountIndex = 0) const override;
-    uint64_t unlockedBalance(uint32_t accountIndex = 0) const override;
+    uint64_t balance(const std::string& asset, uint32_t accountIndex = 0) const override;
+    uint64_t unlockedBalance(const std::string& asset, uint32_t accountIndex = 0) const override;
     uint64_t blockChainHeight() const override;
     uint64_t approximateBlockChainHeight() const override;
     uint64_t estimateBlockChainHeight() const override;
@@ -159,6 +159,10 @@ public:
                                                 PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
                                                 uint32_t subaddr_account = 0,
                                                 std::set<uint32_t> subaddr_indices = {}) override;
+    PendingTransaction * createAuditTransaction(uint32_t mixin_count,
+                                                PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
+                                                uint32_t subaddr_account = 0,
+                                                std::set<uint32_t> subaddr_indices = {}) override;
     PendingTransaction * createTransactionMultDest(const transaction_type &tx_type,
                                                    const std::vector<std::string> &dst_addr, const std::string &payment_id,
                                                    optional<std::vector<uint64_t>> amount, uint32_t mixin_count,
@@ -180,6 +184,13 @@ public:
     bool exportOutputs(const std::string &filename, bool all = false) override;
     bool importOutputs(const std::string &filename) override;
     bool scanTransactions(const std::vector<std::string> &txids) override;
+
+    bool setupBackgroundSync(const BackgroundSyncType background_sync_type, const std::string &wallet_password, const optional<std::string> &background_cache_password = optional<std::string>()) override;
+    BackgroundSyncType getBackgroundSyncType() const override;
+    bool startBackgroundSync() override;
+    bool stopBackgroundSync(const std::string &wallet_password) override;
+    bool isBackgroundSyncing() const override;
+    bool isBackgroundWallet() const override;
 
     virtual void disposeTransaction(PendingTransaction * t) override;
     virtual uint64_t estimateTransactionFee(const std::vector<std::pair<std::string, uint64_t>> &destinations,
@@ -249,6 +260,7 @@ private:
     bool isNewWallet() const;
     void pendingTxPostProcess(PendingTransactionImpl * pending);
     bool doInit(const std::string &daemon_address, const std::string &proxy_address, uint64_t upper_transaction_size_limit = 0, bool ssl = false);
+    bool checkBackgroundSync(const std::string &message) const;
 
 private:
     friend class YieldInfoImpl;
@@ -264,6 +276,10 @@ private:
     mutable boost::mutex m_statusMutex;
     mutable int m_status;
     mutable std::string m_errorString;
+    // TODO: harden password handling in the wallet API, see relevant discussion
+    // https://github.com/monero-project/monero-gui/issues/1537
+    // https://github.com/feather-wallet/feather/issues/72#issuecomment-1405602142
+    // https://github.com/monero-project/monero/pull/8619#issuecomment-1632951461
     std::string m_password;
     std::unique_ptr<TransactionHistoryImpl> m_history;
     std::unique_ptr<Wallet2CallbackImpl> m_wallet2Callback;

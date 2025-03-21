@@ -29,7 +29,8 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #pragma once
-#include <boost/asio/io_service.hpp>
+#include <boost/asio/executor_work_guard.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/function/function_fwd.hpp>
 #if BOOST_VERSION >= 107400
 #include <boost/serialization/library_version_type.hpp>
@@ -1154,12 +1155,28 @@ namespace cryptonote
     uint64_t get_adjusted_time(uint64_t height) const;
 
     /**
+     * calculate the audit payouts
+     *
+     * @return TRUE if the payouts were calculated successfully, FALSE otherwise
+     */
+    bool calculate_audit_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& audit_payouts);
+
+    /**
      * calculate the yield payouts
      *
      * @return TRUE if the payouts were calculated successfully, FALSE otherwise
      */
     bool calculate_yield_payouts(const uint64_t start_height, std::vector<std::pair<yield_tx_info, uint64_t>>& yield_payouts);
 
+    /**
+     * @brief get the ABI entry for a particular height from the cache
+     *
+     * Retrieve the ABI entry for the specified height from the local cache.
+     *
+     * @return TRUE if the entry was located and returned, FALSE otherwise
+     */
+    bool get_abi_entry(const uint64_t height, cryptonote::audit_block_info& ybi);
+    
     /**
      * @brief get the complete YBI cache
      *
@@ -1257,9 +1274,9 @@ namespace cryptonote
     crypto::hash m_difficulty_for_next_block_top_hash;
     difficulty_type m_difficulty_for_next_block;
 
-    boost::asio::io_service m_async_service;
+    boost::asio::io_context m_async_service;
     boost::thread_group m_async_pool;
-    std::unique_ptr<boost::asio::io_service::work> m_async_work_idle;
+    std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> m_async_work_idle;
 
     // some invalid blocks
     blocks_ext_by_hash m_invalid_blocks;     // crypto::hash -> block_extended_info
@@ -1529,12 +1546,11 @@ namespace cryptonote
      *
      * @param b the block containing the miner transaction to be validated
      * @param height the blockchain's weight
-     * @param txs a vector containing all the TXs and their blobs, needed to obtain tx_types, asset_types and burnt amounts
      * @param version hard fork version for that transaction
      *
      * @return false if anything is found wrong with the protocol transaction, otherwise true
      */
-    bool validate_protocol_transaction(const block& b, uint64_t height, std::vector<std::pair<transaction, blobdata>>& txs, uint8_t hf_version);
+    bool validate_protocol_transaction(const block& b, uint64_t height, uint8_t hf_version);
 
     /**
      * @brief reverts the blockchain to its previous state following a failed switch

@@ -55,6 +55,7 @@ target_link_libraries(cryptonote_core
     device
     oracle
     hardforks
+    fcmp_pp
     ${Boost_DATE_TIME_LIBRARY}
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${Boost_SERIALIZATION_LIBRARY}

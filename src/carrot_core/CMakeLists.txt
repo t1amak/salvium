@@ -30,6 +30,7 @@ set(carrot_core_sources
   account_secrets.cpp
   address_utils.cpp
   carrot_enote_scan.cpp
+  carrot_enote_types.cpp
   core_types.cpp
   destination.cpp
   device_ram_borrowed.cpp
@@ -49,7 +50,8 @@ target_link_libraries(carrot_core
   PUBLIC
     cncrypto
     epee
-    ringct
+    mx25519_static
+    ringct_basic
     seraphis_crypto
   PRIVATE
     ${EXTRA_LIBRARIES})

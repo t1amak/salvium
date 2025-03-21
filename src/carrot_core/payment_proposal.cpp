@@ -72,27 +72,33 @@ bool get_return_address_f_point(const crypto::hash &s_sender_receiver,
 
     // Calculate the multiplicative inverse of k_rp (k_rp^-1)
     rct::key key_inv_rp = rct::invert(rct::sk2rct(k_rp));
-  
-    // Calculate the F point value (F = (k_rp^-1) k_v K_o)
-    //crypto::public_key key_temp = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(onetime_address), key_inv_rp));
-    //return k_view_dev.view_key_scalar_mult_ed25519(key_temp, f_point_out);
 
-    // Calculate the F point value (F = (k_rp^-1) H(k_v K_o))
-    crypto::public_key key_temp = k_view_dev.view_key_scalar_mult_ed25519(onetime_address, f_point_out);
-    crypto::public_key key_hash = rct::rct2pk(rct::cn_fast_hash(key_temp));
+    // Calculate the K_sra value (K_sra = K_c + sra_g.G + sra_t.T)
+
+    // Calculate the F point value (F = (k_rp^-1).K_sra)
+    /*
+    crypto::public_key key_temp = crypto::null_pkey;
+    bool ok = k_view_dev.view_key_scalar_mult_ed25519(onetime_address, key_temp); // key_temp = k_v . K_o
+    crypto::hash hash = crypto::cn_fast_hash(key_temp.data, sizeof(crypto::public_key));
+    crypto::public_key key_hash = crypto::null_pkey;
+    crypto::hash_to_point(hash, key_hash);
+    */
+    assert(false);
+    return false;
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
-static crypto::secret_key get_enote_ephemeral_privkey(const CarrotPaymentProposalV1 &proposal,
+static crypto::secret_key get_enote_ephemeral_privkey(const janus_anchor_t randomness,
+    const CarrotDestinationV1 &destination,
     const input_context_t &input_context)
 {
     // d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
     crypto::secret_key enote_ephemeral_privkey;
-    make_carrot_enote_ephemeral_privkey(proposal.randomness,
+    make_carrot_enote_ephemeral_privkey(randomness,
         input_context,
-        proposal.destination.address_spend_pubkey,
-        proposal.destination.address_view_pubkey,
-        proposal.destination.payment_id,
+        destination.address_spend_pubkey,
+        destination.address_view_pubkey,
+        destination.payment_id,
         enote_ephemeral_privkey);
 
     return enote_ephemeral_privkey;
@@ -100,6 +106,7 @@ static crypto::secret_key get_enote_ephemeral_privkey(const CarrotPaymentProposa
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
 static crypto::secret_key get_enote_ephemeral_privkey(const CarrotPaymentProposalReturnV1 &proposal,
+    const CarrotDestinationV1 &destination,
     const input_context_t &input_context)
 {
   // d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
@@ -117,13 +124,39 @@ static crypto::secret_key get_enote_ephemeral_privkey(const CarrotPaymentProposa
 }
 //-------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------------------------
+static mx25519_pubkey get_enote_ephemeral_pubkey(const janus_anchor_t randomness,
+    const CarrotDestinationV1 &destination,
+    const input_context_t &input_context)
+{
+    // d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
+    const crypto::secret_key enote_ephemeral_privkey{get_enote_ephemeral_privkey(randomness,
+        destination,
+        input_context)};
+
+    mx25519_pubkey enote_ephemeral_pubkey;
+    if (destination.is_subaddress)
+        // D_e = d_e ConvertPointE(K^j_s)
+        make_carrot_enote_ephemeral_pubkey_subaddress(enote_ephemeral_privkey,
+            destination.address_spend_pubkey,
+            enote_ephemeral_pubkey);
+    else
+        // D_e = d_e B
+        make_carrot_enote_ephemeral_pubkey_cryptonote(enote_ephemeral_privkey,
+            enote_ephemeral_pubkey);
+
+    return enote_ephemeral_pubkey;
+}
+//-------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------
 static void get_normal_proposal_ecdh_parts(const CarrotPaymentProposalV1 &proposal,
     const input_context_t &input_context,
-    crypto::x25519_pubkey &enote_ephemeral_pubkey_out,
-    crypto::x25519_pubkey &s_sender_receiver_unctx_out)
+    mx25519_pubkey &enote_ephemeral_pubkey_out,
+    mx25519_pubkey &s_sender_receiver_unctx_out)
 {
     // 1. d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
-    const crypto::secret_key enote_ephemeral_privkey = get_enote_ephemeral_privkey(proposal, input_context);
+    const crypto::secret_key enote_ephemeral_privkey = get_enote_ephemeral_privkey(proposal.randomness,
+        proposal.destination,
+        input_context);
 
     // 2. make D_e
     enote_ephemeral_pubkey_out = get_enote_ephemeral_pubkey(proposal, input_context);
@@ -137,11 +170,13 @@ static void get_normal_proposal_ecdh_parts(const CarrotPaymentProposalV1 &propos
 //-------------------------------------------------------------------------------------------------------------------
 static void get_return_proposal_ecdh_parts(const CarrotPaymentProposalReturnV1 &proposal,
     const input_context_t &input_context,
-    crypto::x25519_pubkey &enote_ephemeral_pubkey_out,
-    crypto::x25519_pubkey &s_sender_receiver_unctx_out)
+    mx25519_pubkey &enote_ephemeral_pubkey_out,
+    mx25519_pubkey &s_sender_receiver_unctx_out)
 {
     // 1. d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
-    const crypto::secret_key enote_ephemeral_privkey = get_enote_ephemeral_privkey(proposal, input_context);
+    const crypto::secret_key enote_ephemeral_privkey = get_enote_ephemeral_privkey(proposal.randomness,
+        proposal.destination,
+        input_context);
 
     // 2. make D_e
     enote_ephemeral_pubkey_out = get_enote_ephemeral_pubkey(proposal, input_context);
@@ -169,9 +204,11 @@ static void get_output_proposal_parts(const crypto::hash &s_sender_receiver,
 {
     // 1. k_a = H_n(s^ctx_sr, enote_type) if !coinbase, else 1
     if (coinbase_amount_commitment)
-        amount_blinding_factor_out = rct::rct2sk(rct::I);
+        sc_1(to_bytes(amount_blinding_factor_out));
     else
         make_carrot_amount_blinding_factor(s_sender_receiver,
+            amount,
+            destination_spend_pubkey,
             enote_type,
             amount_blinding_factor_out);
 
@@ -249,13 +286,14 @@ bool operator==(const CarrotPaymentProposalReturnV1 &a, const CarrotPaymentPropo
            a.change_onetime_address             == b.change_onetime_address &&
            a.amount                             == b.amount &&
            a.randomness                         == b.randomness;
-}//-------------------------------------------------------------------------------------------------------------------
+}
+//-------------------------------------------------------------------------------------------------------------------
 bool operator==(const CarrotPaymentProposalSelfSendV1 &a, const CarrotPaymentProposalSelfSendV1 &b)
 {
     return a.destination_address_spend_pubkey == b.destination_address_spend_pubkey &&
            a.amount                           == b.amount &&
            a.enote_type                       == b.enote_type &&
-           a.enote_ephemeral_pubkey           == b.enote_ephemeral_pubkey;
+           0 == memcmp(&a.enote_ephemeral_pubkey, &b.enote_ephemeral_pubkey, sizeof(mx25519_pubkey));
 }
 //-------------------------------------------------------------------------------------------------------------------
 bool operator<(const RCTOutputEnoteProposal &a, const RCTOutputEnoteProposal &b)
@@ -263,39 +301,25 @@ bool operator<(const RCTOutputEnoteProposal &a, const RCTOutputEnoteProposal &b)
     return memcmp(&a.enote.onetime_address, &b.enote.onetime_address, sizeof(crypto::public_key)) < 0;
 }
 //-------------------------------------------------------------------------------------------------------------------
-crypto::x25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalV1 &proposal,
+mx25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalV1 &proposal,
     const input_context_t &input_context)
 {
-    // d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
-    const crypto::secret_key enote_ephemeral_privkey{get_enote_ephemeral_privkey(proposal, input_context)};
-
-    crypto::x25519_pubkey enote_ephemeral_pubkey;
-    if (proposal.destination.is_subaddress)
-        // D_e = d_e ConvertPointE(K^j_s)
-        make_carrot_enote_ephemeral_pubkey_subaddress(enote_ephemeral_privkey,
-            proposal.destination.address_spend_pubkey,
-            enote_ephemeral_pubkey);
-    else
-        // D_e = d_e B
-        make_carrot_enote_ephemeral_pubkey_cryptonote(enote_ephemeral_privkey,
-            enote_ephemeral_pubkey);
-
-    return enote_ephemeral_pubkey;
+    return get_enote_ephemeral_pubkey(proposal.randomness, proposal.destination, input_context);
 }
 //-------------------------------------------------------------------------------------------------------------------
-crypto::x25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalReturnV1 &proposal,
+mx25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalReturnV1 &proposal,
     const input_context_t &input_context)
 {
-    // d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
-    const crypto::secret_key enote_ephemeral_privkey{get_enote_ephemeral_privkey(proposal, input_context)};
+  // d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
+  const crypto::secret_key enote_ephemeral_privkey{get_enote_ephemeral_privkey(proposal.randomness, proposal.destination, input_context)};
 
-    crypto::x25519_pubkey enote_ephemeral_pubkey;
-    // D_e = d_e ConvertPointE(K^{change}_o)
-    make_carrot_enote_ephemeral_pubkey_subaddress(enote_ephemeral_privkey,
-                                                  proposal.change_onetime_address,
-                                                  enote_ephemeral_pubkey);
+  mx25519_pubkey enote_ephemeral_pubkey;
+  // D_e = d_e ConvertPointE(K^{change}_o)
+  make_carrot_enote_ephemeral_pubkey_subaddress(enote_ephemeral_privkey,
+                                                proposal.change_onetime_address,
+                                                enote_ephemeral_pubkey);
 
-    return enote_ephemeral_pubkey;
+  return enote_ephemeral_pubkey;
 }
 //-------------------------------------------------------------------------------------------------------------------
 void get_coinbase_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
@@ -315,7 +339,7 @@ void get_coinbase_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
     make_carrot_input_context_coinbase(block_index, input_context);
 
     // 3. make D_e and do external ECDH
-    crypto::x25519_pubkey s_sender_receiver_unctx; auto dhe_wiper = auto_wiper(s_sender_receiver_unctx);
+    mx25519_pubkey s_sender_receiver_unctx; auto dhe_wiper = auto_wiper(s_sender_receiver_unctx);
     get_normal_proposal_ecdh_parts(proposal,
         input_context,
         output_enote_out.enote_ephemeral_pubkey,
@@ -370,7 +394,7 @@ void get_protocol_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
     make_carrot_input_context_protocol(block_index, input_context);
 
     // 3. make D_e and do external ECDH
-    crypto::x25519_pubkey s_sender_receiver_unctx; auto dhe_wiper = auto_wiper(s_sender_receiver_unctx);
+    mx25519_pubkey s_sender_receiver_unctx; auto dhe_wiper = auto_wiper(s_sender_receiver_unctx);
     get_normal_proposal_ecdh_parts(proposal,
         input_context,
         output_enote_out.enote_ephemeral_pubkey,
@@ -423,7 +447,7 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
     make_carrot_input_context(tx_first_key_image, input_context);
 
     // 3. make D_e and do external ECDH
-    crypto::x25519_pubkey s_sender_receiver_unctx; auto dhe_wiper = auto_wiper(s_sender_receiver_unctx);
+    mx25519_pubkey s_sender_receiver_unctx; auto dhe_wiper = auto_wiper(s_sender_receiver_unctx);
     get_normal_proposal_ecdh_parts(proposal,
         input_context,
         output_enote_out.enote.enote_ephemeral_pubkey,
@@ -475,7 +499,7 @@ void get_output_proposal_return_v1(const CarrotPaymentProposalReturnV1 &proposal
     make_carrot_input_context(tx_first_key_image, input_context);
 
     // 3. make D_e and do external ECDH
-    crypto::x25519_pubkey s_sender_receiver_unctx; auto dhe_wiper = auto_wiper(s_sender_receiver_unctx);
+    mx25519_pubkey s_sender_receiver_unctx; auto dhe_wiper = auto_wiper(s_sender_receiver_unctx);
     get_return_proposal_ecdh_parts(proposal,
         input_context,
         output_enote_out.enote.enote_ephemeral_pubkey,
@@ -526,22 +550,37 @@ void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &propo
     const view_incoming_key_device &k_view_dev,
     const crypto::public_key &account_spend_pubkey,
     const crypto::key_image &tx_first_key_image,
+    const std::optional<mx25519_pubkey> &other_enote_ephemeral_pubkey,
     RCTOutputEnoteProposal &output_enote_out)
 {
     // 1. sanity checks
-    // @TODO
+    CHECK_AND_ASSERT_THROW_MES(!proposal.internal_message,
+        "get output proposal special v1: internal messages are only for internal selfsends, not special selfsends");
 
     // 2. input context: input_context = "R" || KI_1
     input_context_t input_context;
     make_carrot_input_context(tx_first_key_image, input_context);
 
-    // 3. s_sr = 8 * k_v * D_e
-    crypto::x25519_pubkey s_sender_receiver_unctx;
-    CHECK_AND_ASSERT_THROW_MES(k_view_dev.view_key_8_scalar_mult_x25519(proposal.enote_ephemeral_pubkey,
+    // 3. D_e
+    const bool missing_enote_ephemeral_pubkeys = !proposal.enote_ephemeral_pubkey && !other_enote_ephemeral_pubkey;
+    const bool mismatched_enote_ephemeral_pubkeys = proposal.enote_ephemeral_pubkey &&
+        other_enote_ephemeral_pubkey &&
+        memcmp(&*proposal.enote_ephemeral_pubkey, &*other_enote_ephemeral_pubkey, sizeof(mx25519_pubkey));
+    CHECK_AND_ASSERT_THROW_MES(!missing_enote_ephemeral_pubkeys,
+        "get output proposal special v1: no enote ephemeral pubkey provided");
+    CHECK_AND_ASSERT_THROW_MES(!mismatched_enote_ephemeral_pubkeys,
+        "get output proposal special v1: mismatched enote ephemeral pubkeys provided");
+    const mx25519_pubkey enote_ephemeral_pubkey = proposal.enote_ephemeral_pubkey.value_or(
+        other_enote_ephemeral_pubkey.value_or(mx25519_pubkey{}));
+
+    // 4. s_sr = k_v D_e
+    // SRCG: this used to be s_sr = 8 * k_v * D_e - what happened to the cofactor 8??
+    mx25519_pubkey s_sender_receiver_unctx; auto ecdh_wiper = auto_wiper(s_sender_receiver_unctx);
+    CHECK_AND_ASSERT_THROW_MES(k_view_dev.view_key_scalar_mult_x25519(enote_ephemeral_pubkey,
         s_sender_receiver_unctx),
         "get output proposal special v1: HW device failed to perform ECDH with ephemeral pubkey");
 
-    // 4. build the output enote address pieces
+    // 5. build the output enote address pieces
     crypto::hash s_sender_receiver; auto q_wiper = auto_wiper(s_sender_receiver);
     encrypted_payment_id_t dummy_encrypted_payment_id;
     get_external_output_proposal_parts(s_sender_receiver_unctx,
@@ -549,7 +588,7 @@ void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &propo
         null_payment_id,
         proposal.amount,
         proposal.enote_type,
-        proposal.enote_ephemeral_pubkey,
+        enote_ephemeral_pubkey,
         input_context,
         false, // coinbase_amount_commitment
         s_sender_receiver,
@@ -560,21 +599,21 @@ void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &propo
         dummy_encrypted_payment_id,
         output_enote_out.enote.view_tag);
 
-    // 5. make special janus anchor: anchor_sp = H_16(D_e, input_context, Ko, k_v, K_s)
+    // 6. make special janus anchor: anchor_sp = H_16(D_e, input_context, Ko, k_v, K_s)
     janus_anchor_t janus_anchor_special;
-    k_view_dev.make_janus_anchor_special(proposal.enote_ephemeral_pubkey,
+    k_view_dev.make_janus_anchor_special(enote_ephemeral_pubkey,
         input_context,
         output_enote_out.enote.onetime_address,
         account_spend_pubkey,
         janus_anchor_special);
 
-    // 6. encrypt special anchor: anchor_enc = anchor XOR m_anchor
+    // 7. encrypt special anchor: anchor_enc = anchor XOR m_anchor
     output_enote_out.enote.anchor_enc = encrypt_carrot_anchor(janus_anchor_special,
         s_sender_receiver,
         output_enote_out.enote.onetime_address);
 
-    // 7. save the enote ephemeral pubkey, first tx key image, and amount
-    output_enote_out.enote.enote_ephemeral_pubkey = proposal.enote_ephemeral_pubkey;
+    // 8. save the enote ephemeral pubkey, first tx key image, and amount
+    output_enote_out.enote.enote_ephemeral_pubkey = enote_ephemeral_pubkey;
     output_enote_out.enote.tx_first_key_image     = tx_first_key_image;
     output_enote_out.amount                       = proposal.amount;
 }
@@ -582,6 +621,7 @@ void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &propo
 void get_output_proposal_internal_v1(const CarrotPaymentProposalSelfSendV1 &proposal,
     const view_balance_secret_device &s_view_balance_dev,
     const crypto::key_image &tx_first_key_image,
+    const std::optional<mx25519_pubkey> &other_enote_ephemeral_pubkey,
     RCTOutputEnoteProposal &output_enote_out)
 {
     // 1. sanity checks
@@ -591,20 +631,32 @@ void get_output_proposal_internal_v1(const CarrotPaymentProposalSelfSendV1 &prop
     input_context_t input_context;
     make_carrot_input_context(tx_first_key_image, input_context);
 
-    // 3. s^ctx_sr = H_32(s_vb, D_e, input_context)
+    // 3. D_e
+    const bool missing_enote_ephemeral_pubkeys = !proposal.enote_ephemeral_pubkey && !other_enote_ephemeral_pubkey;
+    const bool mismatched_enote_ephemeral_pubkeys = proposal.enote_ephemeral_pubkey &&
+        other_enote_ephemeral_pubkey &&
+        memcmp(&*proposal.enote_ephemeral_pubkey, &*other_enote_ephemeral_pubkey, sizeof(mx25519_pubkey));
+    CHECK_AND_ASSERT_THROW_MES(!missing_enote_ephemeral_pubkeys,
+        "get output proposal internal v1: no enote ephemeral pubkey provided");
+    CHECK_AND_ASSERT_THROW_MES(!mismatched_enote_ephemeral_pubkeys,
+        "get output proposal internal v1: mismatched enote ephemeral pubkeys provided");
+    const mx25519_pubkey enote_ephemeral_pubkey = proposal.enote_ephemeral_pubkey.value_or(
+        other_enote_ephemeral_pubkey.value_or(mx25519_pubkey{}));
+
+    // 4. s^ctx_sr = H_32(s_vb, D_e, input_context)
     crypto::hash s_sender_receiver; auto q_wiper = auto_wiper(s_sender_receiver);
-    s_view_balance_dev.make_internal_sender_receiver_secret(proposal.enote_ephemeral_pubkey,
+    s_view_balance_dev.make_internal_sender_receiver_secret(enote_ephemeral_pubkey,
         input_context,
         s_sender_receiver);
 
-    // 4. build the output enote address pieces
+    // 5. build the output enote address pieces
     encrypted_payment_id_t dummy_encrypted_payment_id;
     get_output_proposal_parts(s_sender_receiver,
         proposal.destination_address_spend_pubkey,
         null_payment_id,
         proposal.amount,
         proposal.enote_type,
-        proposal.enote_ephemeral_pubkey,
+        enote_ephemeral_pubkey,
         input_context,
         false, // coinbase_amount_commitment
         output_enote_out.amount_blinding_factor,
@@ -613,16 +665,21 @@ void get_output_proposal_internal_v1(const CarrotPaymentProposalSelfSendV1 &prop
         output_enote_out.enote.amount_enc,
         dummy_encrypted_payment_id);
 
-    // 5. vt = H_3(s_vb || input_context || Ko)
+    // 6. vt = H_3(s_vb || input_context || Ko)
     s_view_balance_dev.make_internal_view_tag(input_context,
         output_enote_out.enote.onetime_address,
         output_enote_out.enote.view_tag);
 
-    // 4. generate random encrypted anchor
-    output_enote_out.enote.anchor_enc = gen_janus_anchor();
+    // 7. anchor = given message OR 0s, if not available
+    const janus_anchor_t anchor = proposal.internal_message.value_or(janus_anchor_t{});
 
-    // 5. save the enote ephemeral pubkey, first tx key image, and amount
-    output_enote_out.enote.enote_ephemeral_pubkey = proposal.enote_ephemeral_pubkey;
+    // 8. encrypt anchor: anchor_enc = anchor XOR m_anchor
+    output_enote_out.enote.anchor_enc = encrypt_carrot_anchor(anchor,
+        s_sender_receiver,
+        output_enote_out.enote.onetime_address);
+
+    // 9. save the enote ephemeral pubkey, first tx key image, and amount
+    output_enote_out.enote.enote_ephemeral_pubkey = enote_ephemeral_pubkey;
     output_enote_out.enote.tx_first_key_image     = tx_first_key_image;
     output_enote_out.amount                       = proposal.amount;
 }
