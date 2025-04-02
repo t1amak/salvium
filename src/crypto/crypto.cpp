@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2022, The Monero Project
+// Copyright (c) 2014-2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -616,6 +616,12 @@ namespace crypto {
     ge_fromfe_frombytes_vartime(&point, reinterpret_cast<const unsigned char *>(&h));
     ge_mul8(&point2, &point);
     ge_p1p1_to_p3(&res, &point2);
+  }
+
+  void crypto_ops::derive_key_image_generator(const public_key &pub, ec_point &ki_gen) {
+    ge_p3 point;
+    hash_to_ec(pub, point);
+    ge_p3_tobytes(&ki_gen, &point);
   }
 
   void crypto_ops::generate_key_image(const public_key &pub, const secret_key &sec, key_image &image) {

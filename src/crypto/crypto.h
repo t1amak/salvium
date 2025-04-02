@@ -71,27 +71,15 @@ namespace crypto {
 
   using secret_key = epee::mlocked<tools::scrubbed<ec_scalar>>;
 
-  POD_CLASS public_keyV {
-    std::vector<public_key> keys;
-    int rows;
-  };
-
-  POD_CLASS secret_keyV {
-    std::vector<secret_key> keys;
-    int rows;
-  };
-
-  POD_CLASS public_keyM {
-    int cols;
-    int rows;
-    std::vector<secret_keyV> column_vectors;
-  };
-
   POD_CLASS key_derivation: ec_point {
     friend class crypto_ops;
   };
 
   POD_CLASS key_image: ec_point {
+    friend class crypto_ops;
+  };
+
+  POD_CLASS key_image_y: ec_point {
     friend class crypto_ops;
   };
 
@@ -145,6 +133,8 @@ namespace crypto {
     friend void generate_tx_proof_v1(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const secret_key &, signature &);
     static bool check_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const signature &, const int);
     friend bool check_tx_proof(const hash &, const public_key &, const public_key &, const boost::optional<public_key> &, const public_key &, const signature &, const int);
+    static void derive_key_image_generator(const public_key &, ec_point &);
+    friend void derive_key_image_generator(const public_key &, ec_point &);
     static void generate_key_image(const public_key &, const secret_key &, key_image &);
     friend void generate_key_image(const public_key &, const secret_key &, key_image &);
     static void generate_ring_signature(const hash &, const key_image &,
@@ -172,8 +162,8 @@ namespace crypto {
    */
   template<typename T>
   T rand() {
-    static_assert(std::is_standard_layout<T>(), "cannot write random bytes into non-standard layout type");
-    static_assert(std::is_trivially_copyable<T>(), "cannot write random bytes into non-trivially copyable type");
+    static_assert(std::is_standard_layout_v<T>, "cannot write random bytes into non-standard layout type");
+    static_assert(std::is_trivially_copyable_v<T>, "cannot write random bytes into non-trivially copyable type");
     typename std::remove_cv<T>::type res;
     generate_random_bytes_thread_safe(sizeof(T), (uint8_t*)&res);
     return res;
@@ -268,6 +258,10 @@ namespace crypto {
   }
   inline bool check_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig, const int version) {
     return crypto_ops::check_tx_proof(prefix_hash, R, A, B, D, sig, version);
+  }
+
+  inline void derive_key_image_generator(const public_key &pub, ec_point &ki_gen) {
+    crypto_ops::derive_key_image_generator(pub, ki_gen);
   }
 
   /* To send money to a key:

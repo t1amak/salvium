@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2022, The Monero Project
+# Copyright (c) 2014-2024, The Monero Project
 #
 # All rights reserved.
 #
@@ -29,10 +29,12 @@
 set(crypto_sources
   aesb.c
   blake256.c
+  blake2b.c
   chacha.c
   crypto-ops-data.c
   crypto-ops.c
   crypto.cpp
+  generators.cpp
   groestl.c
   hash-extra-blake.c
   hash-extra-groestl.c
@@ -72,8 +74,12 @@ target_link_libraries(cncrypto
     randomx
     ${Boost_SYSTEM_LIBRARY}
     ${SODIUM_LIBRARY}
+    ${sodium_LIBRARIES}
   PRIVATE
     ${EXTRA_LIBRARIES})
+target_include_directories(cncrypto
+  PRIVATE
+    ${MX25519_INCLUDE})
 
 if (ARM)
   option(NO_OPTIMIZED_MULTIPLY_ON_ARM

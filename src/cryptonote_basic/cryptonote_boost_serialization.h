@@ -38,6 +38,7 @@
 #include <boost/serialization/is_bitwise_serializable.hpp>
 #include <boost/archive/portable_binary_iarchive.hpp>
 #include <boost/archive/portable_binary_oarchive.hpp>
+#include "carrot_impl/carrot_boost_serialization.h"
 #include "cryptonote_basic.h"
 #include "difficulty.h"
 #include "common/unordered_containers_boost_serialization.h"
@@ -115,6 +116,16 @@ namespace boost
     a & x.asset_type;
     a & x.unlock_time;
     a & x.view_tag;
+  }
+
+  template <class Archive>
+  inline void serialize(Archive &a, cryptonote::txout_to_carrot_v1 &x, const boost::serialization::version_type ver)
+  {
+    a & x.key;
+    a & x.asset_type;
+    a & x.unlock_time;
+    a & x.view_tag;
+    a & x.encrypted_janus_anchor;
   }
 
   template <class Archive>

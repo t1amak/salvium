@@ -58,6 +58,7 @@
 #include "common/util.h"
 #include "crypto/chacha.h"
 #include "crypto/hash.h"
+#include "multisig/multisig_account.h"
 #include "ringct/rctTypes.h"
 #include "ringct/rctOps.h"
 #include "checkpoints/checkpoints.h"
@@ -66,13 +67,14 @@
 #include "serialization/pair.h"
 #include "serialization/tuple.h"
 #include "serialization/containers.h"
+#include "scanning_tools.h"
 
 #include "wallet_errors.h"
 #include "common/password.h"
 #include "node_rpc_proxy.h"
 #include "message_store.h"
-#include "wallet_light_rpc.h"
-#include "wallet_rpc_helpers.h"
+//#include "wallet_light_rpc.h"
+//#include "wallet_rpc_helpers.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "wallet.wallet2"
@@ -646,8 +648,8 @@ private:
     };
 
     typedef std::vector<transfer_details> transfer_container;
-    typedef serializable_unordered_map<std::string, std::set<size_t>> transfer_details_indices;
-    typedef serializable_unordered_multimap<crypto::hash, payment_details> payment_container;
+    typedef std::unordered_map<std::string, std::set<size_t>> transfer_details_indices;
+    typedef std::unordered_multimap<crypto::hash, payment_details> payment_container;
     typedef std::set<uint32_t> unique_index_container;
 
     struct multisig_sig
@@ -759,7 +761,7 @@ private:
     {
       std::vector<pending_tx> ptx;
       std::vector<crypto::key_image> key_images;
-      serializable_unordered_map<crypto::public_key, crypto::key_image> tx_key_images;
+      std::unordered_map<crypto::public_key, crypto::key_image> tx_key_images;
 
       BEGIN_SERIALIZE_OBJECT()
         VERSION_FIELD(0)
@@ -869,7 +871,7 @@ private:
     {
       bool first_refresh_done = false;
       uint64_t start_height = 0;
-      serializable_unordered_map<crypto::hash, background_synced_tx_t> txs;
+      std::unordered_map<crypto::hash, background_synced_tx_t> txs;
 
       // Relevant wallet settings
       uint64_t wallet_refresh_from_block_height;
@@ -1292,29 +1294,29 @@ private:
         a & m_blockchain;
       }
       a & m_transfers;
-      a & m_transfers_indices.parent();
-      a & m_locked_coins.parent();
-      a & m_salvium_txs.parent();
+      a & m_transfers_indices;
+      a & m_locked_coins;
+      a & m_salvium_txs;
       a & m_account_public_address;
-      a & m_key_images.parent();
+      a & m_key_images;
       if(ver < 6)
         return;
-      a & m_unconfirmed_txs.parent();
+      a & m_unconfirmed_txs;
       if(ver < 7)
         return;
-      a & m_payments.parent();
+      a & m_payments;
       if(ver < 8)
         return;
-      a & m_tx_keys.parent();
+      a & m_tx_keys;
       if(ver < 9)
         return;
-      a & m_confirmed_txs.parent();
+      a & m_confirmed_txs;
       if(ver < 11)
         return;
       a & dummy_refresh_height;
       if(ver < 12)
         return;
-      a & m_tx_notes.parent();
+      a & m_tx_notes;
       if(ver < 13)
         return;
       if (ver < 17)
@@ -1339,7 +1341,7 @@ private:
         }
         return;
       }
-      a & m_pub_keys.parent();
+      a & m_pub_keys;
       if(ver < 16)
         return;
       a & m_address_book;
@@ -1360,17 +1362,17 @@ private:
       a & m_scanned_pool_txs[1];
       if (ver < 20)
         return;
-      a & m_subaddresses.parent();
+      a & m_subaddresses;
       std::unordered_map<cryptonote::subaddress_index, crypto::public_key> dummy_subaddresses_inv;
       a & dummy_subaddresses_inv;
       a & m_subaddress_labels;
-      a & m_additional_tx_keys.parent();
+      a & m_additional_tx_keys;
       if(ver < 21)
         return;
-      a & m_attributes.parent();
+      a & m_attributes;
       if(ver < 22)
         return;
-      a & m_unconfirmed_payments.parent();
+      a & m_unconfirmed_payments;
       if(ver < 23)
         return;
       a & (std::pair<std::map<std::string, std::string>, std::vector<std::string>>&)m_account_tags;
@@ -1382,13 +1384,13 @@ private:
       a & m_last_block_reward;
       if(ver < 26)
         return;
-      a & m_tx_device.parent();
+      a & m_tx_device;
       if(ver < 27)
         return;
       a & m_device_last_key_image_sync;
       if(ver < 28)
         return;
-      a & m_cold_key_images.parent();
+      a & m_cold_key_images;
       if(ver < 29)
         return;
       a & m_rpc_client_secret_key;
@@ -1635,7 +1637,7 @@ private:
      * \brief  Get the list of registered account tags. 
      * \return first.Key=(tag's name), first.Value=(tag's label), second[i]=(i-th account's tag)
      */
-    const std::pair<serializable_map<std::string, std::string>, std::vector<std::string>>& get_account_tags();
+    const std::pair<std::map<std::string, std::string>, std::vector<std::string>>& get_account_tags();
     /*!
      * \brief  Set a tag to the given accounts.
      * \param  account_indices  Indices of accounts.
@@ -2012,31 +2014,31 @@ private:
     std::string m_mms_file;
     const std::unique_ptr<epee::net_utils::http::abstract_http_client> m_http_client;
     hashchain m_blockchain;
-    serializable_unordered_map<crypto::hash, unconfirmed_transfer_details> m_unconfirmed_txs;
-    serializable_unordered_map<crypto::hash, confirmed_transfer_details> m_confirmed_txs;
-    serializable_unordered_multimap<crypto::hash, pool_payment_details> m_unconfirmed_payments;
-    serializable_unordered_map<crypto::hash, crypto::secret_key> m_tx_keys;
+    std::unordered_map<crypto::hash, unconfirmed_transfer_details> m_unconfirmed_txs;
+    std::unordered_map<crypto::hash, confirmed_transfer_details> m_confirmed_txs;
+    std::unordered_multimap<crypto::hash, pool_payment_details> m_unconfirmed_payments;
+    std::unordered_map<crypto::hash, crypto::secret_key> m_tx_keys;
     cryptonote::checkpoints m_checkpoints;
-    serializable_unordered_map<crypto::hash, std::vector<crypto::secret_key>> m_additional_tx_keys;
+    std::unordered_map<crypto::hash, std::vector<crypto::secret_key>> m_additional_tx_keys;
 
     transfer_container m_transfers;
     transfer_details_indices m_transfers_indices;
-    serializable_unordered_map<crypto::public_key, locked_yield_details> m_locked_coins;
-    serializable_map<crypto::public_key, size_t> m_salvium_txs;
+    std::unordered_map<crypto::public_key, locked_yield_details> m_locked_coins;
+    std::map<crypto::public_key, size_t> m_salvium_txs;
     payment_container m_payments;
-    serializable_unordered_map<crypto::key_image, size_t> m_key_images;
-    serializable_unordered_map<crypto::public_key, size_t> m_pub_keys;
+    std::unordered_map<crypto::key_image, size_t> m_key_images;
+    std::unordered_map<crypto::public_key, size_t> m_pub_keys;
     cryptonote::account_public_address m_account_public_address;
-    serializable_unordered_map<crypto::public_key, cryptonote::subaddress_index> m_subaddresses;
+    std::unordered_map<crypto::public_key, cryptonote::subaddress_index> m_subaddresses;
     std::vector<std::vector<std::string>> m_subaddress_labels;
-    serializable_unordered_map<crypto::hash, std::string> m_tx_notes;
-    serializable_unordered_map<std::string, std::string> m_attributes;
+    std::unordered_map<crypto::hash, std::string> m_tx_notes;
+    std::unordered_map<std::string, std::string> m_attributes;
     std::vector<tools::wallet2::address_book_row> m_address_book;
-    std::pair<serializable_map<std::string, std::string>, std::vector<std::string>> m_account_tags;
+    std::pair<std::map<std::string, std::string>, std::vector<std::string>> m_account_tags;
     uint64_t m_upper_transaction_weight_limit; //TODO: auto-calc this value or request from daemon, now use some fixed value
     const std::vector<std::vector<tools::wallet2::multisig_info>> *m_multisig_rescan_info;
     const std::vector<std::vector<rct::key>> *m_multisig_rescan_k;
-    serializable_unordered_map<crypto::public_key, crypto::key_image> m_cold_key_images;
+    std::unordered_map<crypto::public_key, crypto::key_image> m_cold_key_images;
 
     std::atomic<bool> m_run;
 
@@ -2116,10 +2118,10 @@ private:
     bool m_allow_mismatched_daemon_version;
 
     // Aux transaction data from device
-    serializable_unordered_map<crypto::hash, std::string> m_tx_device;
+    std::unordered_map<crypto::hash, std::string> m_tx_device;
 
     // store calculated key image for faster lookup
-    serializable_unordered_map<crypto::public_key, serializable_map<uint64_t, crypto::key_image> > m_key_image_cache;
+    std::unordered_map<crypto::public_key, std::map<uint64_t, crypto::key_image> > m_key_image_cache;
 
     std::string m_ring_database;
     bool m_ring_history_saved;
@@ -2582,7 +2584,7 @@ namespace boost
       a & x.key_images;
       if (ver < 1)
         return;
-      a & x.tx_key_images.parent();
+      a & x.tx_key_images;
     }
 
     template <class Archive>
@@ -2701,7 +2703,7 @@ namespace boost
     {
       a & x.first_refresh_done;
       a & x.start_height;
-      a & x.txs.parent();
+      a & x.txs;
       a & x.wallet_refresh_from_block_height;
       a & x.subaddress_lookahead_major;
       a & x.subaddress_lookahead_minor;

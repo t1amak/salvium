@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2022, The Monero Project
+// Copyright (c) 2014-2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -29,6 +29,8 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #pragma once
+
+#include <stdint.h>
 
 /* From fe.h */
 
@@ -145,6 +147,7 @@ extern const ge_p3 ge_p3_identity;
 extern const ge_p3 ge_p3_H;
 void ge_fromfe_frombytes_vartime(ge_p2 *, const unsigned char *);
 void sc_0(unsigned char *);
+void sc_1(unsigned char *);
 void sc_reduce32(unsigned char *);
 void sc_add(unsigned char *, const unsigned char *, const unsigned char *);
 void sc_sub(unsigned char *, const unsigned char *, const unsigned char *);
@@ -154,6 +157,12 @@ void sc_muladd(unsigned char *s, const unsigned char *a, const unsigned char *b,
 int sc_check(const unsigned char *);
 int sc_isnonzero(const unsigned char *); /* Doesn't normalize */
 
+/**
+ * brief: Convert Ed25519 y-coord to X25519 x-coord, AKA "ConvertPointE()" in the Carrot spec
+ */
+void ge_p3_to_x25519(unsigned char *xbytes, const ge_p3 *h);
+int edwards_bytes_to_x25519_vartime(unsigned char *xbytes, const unsigned char *s);
+
 // internal
 uint64_t load_3(const unsigned char *in);
 uint64_t load_4(const unsigned char *in);
@@ -161,5 +170,7 @@ void ge_sub(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q);
 void fe_add(fe h, const fe f, const fe g);
 void fe_tobytes(unsigned char *, const fe);
 void fe_invert(fe out, const fe z);
+void fe_mul(fe out, const fe, const fe);
+void fe_0(fe h);
 
 int ge_p3_is_point_at_infinity_vartime(const ge_p3 *p);

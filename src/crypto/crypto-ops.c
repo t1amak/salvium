@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2022, The Monero Project
+// Copyright (c) 2014-2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -38,7 +38,6 @@ DISABLE_VS_WARNINGS(4146 4244)
 
 /* Predeclarations */
 
-static void fe_mul(fe, const fe, const fe);
 static void fe_sq(fe, const fe);
 static void ge_madd(ge_p1p1 *, const ge_p3 *, const ge_precomp *);
 static void ge_msub(ge_p1p1 *, const ge_p3 *, const ge_precomp *);
@@ -72,7 +71,7 @@ uint64_t load_4(const unsigned char *in)
 h = 0
 */
 
-static void fe_0(fe h) {
+void fe_0(fe h) {
   h[0] = 0;
   h[1] = 0;
   h[2] = 0;
@@ -375,7 +374,7 @@ Can get away with 11 carries, but then data flow is much deeper.
 With tighter constraints on inputs can squeeze carries into int32.
 */
 
-static void fe_mul(fe h, const fe f, const fe g) {
+void fe_mul(fe h, const fe f, const fe g) {
   int32_t f0 = f[0];
   int32_t f1 = f[1];
   int32_t f2 = f[2];
@@ -2430,6 +2429,14 @@ void sc_0(unsigned char *s) {
   }
 }
 
+void sc_1(unsigned char *s) {
+  int i;
+  s[0] = 1;
+  for (i = 1; i < 32; i++) {
+    s[i] = 0;
+  }
+}
+
 void sc_reduce32(unsigned char *s) {
   int64_t s0 = 2097151 & load_3(s);
   int64_t s1 = 2097151 & (load_4(s + 2) >> 5);
@@ -3828,6 +3835,92 @@ int sc_isnonzero(const unsigned char *s) {
     s[9] | s[10] | s[11] | s[12] | s[13] | s[14] | s[15] | s[16] | s[17] |
     s[18] | s[19] | s[20] | s[21] | s[22] | s[23] | s[24] | s[25] | s[26] |
     s[27] | s[28] | s[29] | s[30] | s[31]) - 1) >> 8) + 1;
+}
+
+static void edwardsYZ_to_x25519(unsigned char *xbytes, const fe Y, const fe Z) {
+  // y = Y/Z
+  // x_mont = (1 + y) / (1 - y)
+  //        = (1 + Y/Z) / (1 - Y/Z)
+  //        = (Z + Y) / (Z - Y)
+
+  fe tmp0;
+  fe tmp1;
+  fe_add(tmp0, Z, Y);       // Z + Y
+  fe_sub(tmp1, Z, Y);       // Z - Y
+  fe_invert(tmp1, tmp1);    // 1/(Z - Y)
+  fe_mul(tmp0, tmp0, tmp1); // (Z + Y) / (Z - Y)
+  fe_tobytes(xbytes, tmp0); // tobytes((Z + Y) / (Z - Y))
+}
+
+void ge_p3_to_x25519(unsigned char *xbytes, const ge_p3 *h)
+{
+  edwardsYZ_to_x25519(xbytes, h->Y, h->Z);
+} 
+
+int edwards_bytes_to_x25519_vartime(unsigned char *xbytes, const unsigned char *s)
+{
+  /* From fe_frombytes.c */
+
+  int64_t h0 = load_4(s);
+  int64_t h1 = load_3(s + 4) << 6;
+  int64_t h2 = load_3(s + 7) << 5;
+  int64_t h3 = load_3(s + 10) << 3;
+  int64_t h4 = load_3(s + 13) << 2;
+  int64_t h5 = load_4(s + 16);
+  int64_t h6 = load_3(s + 20) << 7;
+  int64_t h7 = load_3(s + 23) << 5;
+  int64_t h8 = load_3(s + 26) << 4;
+  int64_t h9 = (load_3(s + 29) & 8388607) << 2;
+  int64_t carry0;
+  int64_t carry1;
+  int64_t carry2;
+  int64_t carry3;
+  int64_t carry4;
+  int64_t carry5;
+  int64_t carry6;
+  int64_t carry7;
+  int64_t carry8;
+  int64_t carry9;
+
+  /* Validate the number to be canonical */
+  if (h9 == 33554428 && h8 == 268435440 && h7 == 536870880 && h6 == 2147483520 &&
+    h5 == 4294967295 && h4 == 67108860 && h3 == 134217720 && h2 == 536870880 &&
+    h1 == 1073741760 && h0 >= 4294967277) {
+    return -1;
+  }
+
+  carry9 = (h9 + (int64_t) (1<<24)) >> 25; h0 += carry9 * 19; h9 -= carry9 << 25;
+  carry1 = (h1 + (int64_t) (1<<24)) >> 25; h2 += carry1; h1 -= carry1 << 25;
+  carry3 = (h3 + (int64_t) (1<<24)) >> 25; h4 += carry3; h3 -= carry3 << 25;
+  carry5 = (h5 + (int64_t) (1<<24)) >> 25; h6 += carry5; h5 -= carry5 << 25;
+  carry7 = (h7 + (int64_t) (1<<24)) >> 25; h8 += carry7; h7 -= carry7 << 25;
+
+  carry0 = (h0 + (int64_t) (1<<25)) >> 26; h1 += carry0; h0 -= carry0 << 26;
+  carry2 = (h2 + (int64_t) (1<<25)) >> 26; h3 += carry2; h2 -= carry2 << 26;
+  carry4 = (h4 + (int64_t) (1<<25)) >> 26; h5 += carry4; h4 -= carry4 << 26;
+  carry6 = (h6 + (int64_t) (1<<25)) >> 26; h7 += carry6; h6 -= carry6 << 26;
+  carry8 = (h8 + (int64_t) (1<<25)) >> 26; h9 += carry8; h8 -= carry8 << 26;
+
+  fe Y;
+  Y[0] = h0;
+  Y[1] = h1;
+  Y[2] = h2;
+  Y[3] = h3;
+  Y[4] = h4;
+  Y[5] = h5;
+  Y[6] = h6;
+  Y[7] = h7;
+  Y[8] = h8;
+  Y[9] = h9;
+
+  /* End fe_frombytes.c */
+
+  fe Z;
+  fe_1(Z);
+
+  edwardsYZ_to_x25519(xbytes, Y, Z);
+
+  return 0;
 }
 
 int ge_p3_is_point_at_infinity_vartime(const ge_p3 *p) {
