@@ -73,8 +73,6 @@
 #include "common/password.h"
 #include "node_rpc_proxy.h"
 #include "message_store.h"
-//#include "wallet_light_rpc.h"
-//#include "wallet_rpc_helpers.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "wallet.wallet2"
@@ -126,15 +124,14 @@ private:
   class wallet_keys_unlocker
   {
   public:
-    wallet_keys_unlocker(wallet2 &w, const boost::optional<tools::password_container> &password);
-    wallet_keys_unlocker(wallet2 &w, bool locked, const epee::wipeable_string &password);
+    wallet_keys_unlocker(wallet2 &w, const epee::wipeable_string *password);
     ~wallet_keys_unlocker();
   private:
     wallet2 &w;
-    bool locked;
+    bool can_relock;
     crypto::chacha_key key;
     static boost::mutex lockers_lock;
-    static unsigned int lockers;
+    static std::map<wallet2*, std::size_t> lockers_per_wallet;
   };
 
   class i_wallet2_callback
@@ -1725,6 +1722,8 @@ private:
     uint32_t adjust_priority(uint32_t priority);
 
     bool is_unattended() const { return m_unattended; }
+    bool is_spendkey_encryption_enabled() const
+    { return m_ask_password == AskPasswordToDecrypt && !m_unattended && !m_watch_only && !m_multisig && !m_is_background_wallet; }
 
     std::pair<size_t, uint64_t> estimate_tx_size_and_weight(bool use_rct, int n_inputs, int ring_size, int n_outputs, size_t extra_size);
 
@@ -1889,6 +1888,7 @@ private:
     bool load_keys_buf(const std::string& keys_buf, const epee::wipeable_string& password);
     bool load_keys_buf(const std::string& keys_buf, const epee::wipeable_string& password, boost::optional<crypto::chacha_key>& keys_to_encrypt);
     void load_wallet_cache(const bool use_fs, const std::string& cache_buf = "");
+    void scan_key_image(const wallet::enote_view_incoming_scan_info_t &enote_scan_info, bool pool, std::optional<crypto::key_image> &ki_out);
     void process_new_transaction(const crypto::hash &txid, const cryptonote::transaction& tx, const std::vector<uint64_t> &o_indices, const std::vector<uint64_t> &asset_type_output_indices, uint64_t height, uint8_t block_version, uint64_t ts, bool miner_tx, bool pool, bool double_spend_seen, const tx_cache_data &tx_cache_data, std::map<std::pair<uint64_t, uint64_t>, size_t> *output_tracker_cache = NULL, bool ignore_callbacks = false);
     bool should_skip_block(const cryptonote::block &b, uint64_t height) const;
     void process_new_blockchain_entry(const cryptonote::block& b, const cryptonote::block_complete_entry& bche, const parsed_block &parsed_block, const crypto::hash& bl_id, uint64_t height, const std::vector<tx_cache_data> &tx_cache_data, size_t tx_cache_data_offset, std::map<std::pair<uint64_t, uint64_t>, size_t> *output_tracker_cache = NULL);

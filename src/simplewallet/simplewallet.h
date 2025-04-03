@@ -270,9 +270,6 @@ namespace cryptonote
     bool thaw(const std::vector<std::string>& args);
     bool frozen(const std::vector<std::string>& args);
     bool lock(const std::vector<std::string>& args);
-    bool rpc_payment_info(const std::vector<std::string> &args);
-    bool start_mining_for_rpc(const std::vector<std::string> &args);
-    bool stop_mining_for_rpc(const std::vector<std::string> &args);
     bool show_qr_code(const std::vector<std::string> &args);
     bool net_stats(const std::vector<std::string>& args);
     bool public_nodes(const std::vector<std::string>& args);
@@ -351,7 +348,6 @@ namespace cryptonote
     bool check_inactivity();
     bool check_refresh();
     bool check_mms();
-    bool check_rpc_payment();
 
     void handle_transfer_exception(const std::exception_ptr &e, bool trusted_daemon);
 
