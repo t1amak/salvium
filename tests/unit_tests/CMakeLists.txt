@@ -38,6 +38,12 @@ set(unit_tests_sources
   bulletproofs.cpp
   bulletproofs_plus.cpp
   canonical_amounts.cpp
+  carrot_core.cpp
+  carrot_impl.cpp
+  carrot_legacy.cpp
+  carrot_mock_helpers.cpp
+#  carrot_sparc.cpp
+  carrot_transcript_fixed.cpp
   chacha.cpp
   checkpoints.cpp
   command_line.cpp

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2022, The Monero Project
+// Copyright (c) 2014-2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -65,6 +65,7 @@
 #include "multiexp.h"
 #include "sig_mlsag.h"
 #include "sig_clsag.h"
+#include "view_scan.h"
 
 namespace po = boost::program_options;
 
@@ -101,12 +102,14 @@ int main(int argc, char** argv)
 
   const std::string filter = tools::glob_to_regex(command_line::get_arg(vm, arg_filter));
   const std::string timings_database = command_line::get_arg(vm, arg_timings_database);
-  Params p;
+  Params core_params;
   if (!timings_database.empty())
-    p.td = TimingsDatabase(timings_database);
-  p.verbose = command_line::get_arg(vm, arg_verbose);
-  p.stats = command_line::get_arg(vm, arg_stats);
-  p.loop_multiplier = command_line::get_arg(vm, arg_loop_multiplier);
+    core_params.td = TimingsDatabase(timings_database);
+  core_params.verbose = command_line::get_arg(vm, arg_verbose);
+  core_params.stats = command_line::get_arg(vm, arg_stats);
+  core_params.loop_multiplier = command_line::get_arg(vm, arg_loop_multiplier);
+
+  ParamsShuttle p{core_params};
 
   performance_timer timer;
   timer.start();
@@ -168,23 +171,14 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE4(filter, p, test_check_tx_signature, 2, 10, true, rct::RangeProofBorromean);
 
   TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 2, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 2, 2, true, rct::RangeProofMultiOutputBulletproof, 2);
   TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 10, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 10, 2, true, rct::RangeProofMultiOutputBulletproof, 2);
   TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 100, 2, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 100, 2, true, rct::RangeProofMultiOutputBulletproof, 2);
   TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 2, 10, true, rct::RangeProofPaddedBulletproof, 2);
-  TEST_PERFORMANCE5(filter, p, test_check_tx_signature, 2, 10, true, rct::RangeProofMultiOutputBulletproof, 2);
 
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 2, 2, 64);
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 10, 2, 64);
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 100, 2, 64);
   TEST_PERFORMANCE3(filter, p, test_check_tx_signature_aggregated_bulletproofs, 2, 10, 64);
-
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature_aggregated_bulletproofs, 2, 2, 62, 4);
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature_aggregated_bulletproofs, 10, 2, 62, 4);
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature_aggregated_bulletproofs, 2, 2, 56, 16);
-  TEST_PERFORMANCE4(filter, p, test_check_tx_signature_aggregated_bulletproofs, 10, 2, 56, 16);
 
   TEST_PERFORMANCE4(filter, p, test_check_hash, 0, 1, 0, 1);
   TEST_PERFORMANCE4(filter, p, test_check_hash, 0, 0xffffffffffffffff, 0, 0xffffffffffffffff);
@@ -193,6 +187,18 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE4(filter, p, test_check_hash, 1, 0, 0, 1);
   TEST_PERFORMANCE4(filter, p, test_check_hash, 0xffffffffffffffff, 0xffffffffffffffff, 0, 1);
   TEST_PERFORMANCE4(filter, p, test_check_hash, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff);
+
+  // test view scan performance with view tags
+  ParamsShuttleViewScan p_view_scan;
+  p_view_scan.core_params = p.core_params;
+
+  TEST_PERFORMANCE0(filter, p_view_scan, test_view_scan_cn);
+  TEST_PERFORMANCE0(filter, p_view_scan, test_view_scan_cn_optimized);
+  TEST_PERFORMANCE0(filter, p_view_scan, test_view_scan_carrot);
+  p_view_scan.test_view_tag_check = true;
+  TEST_PERFORMANCE0(filter, p_view_scan, test_view_scan_cn);
+  TEST_PERFORMANCE0(filter, p_view_scan, test_view_scan_cn_optimized);
+  TEST_PERFORMANCE0(filter, p_view_scan, test_view_scan_carrot);
 
   TEST_PERFORMANCE0(filter, p, test_is_out_to_acc);
   TEST_PERFORMANCE0(filter, p, test_is_out_to_acc_precomp);

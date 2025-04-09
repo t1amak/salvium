@@ -121,6 +121,13 @@ void make_carrot_view_tag(const unsigned char s_sender_receiver_unctx[32],
 */
 void make_carrot_input_context_coinbase(const std::uint64_t block_index, input_context_t &input_context_out);
 /**
+* brief: make_carrot_input_context_protocol - input context for a sender-receiver secret (protocol txs)
+*    input_context = "P" || IntToBytes256(block_index)
+* param: block_index - block index of the protocol tx
+* outparam: input_context_out - "C" || IntToBytes256(block_index)
+*/
+void make_carrot_input_context_protocol(const std::uint64_t block_index, input_context_t &input_context_out);
+/**
 * brief: make_carrot_input_context - input context for a sender-receiver secret (standard RingCT txs)
 *    input_context = "R" || KI_1
 * param: first_rct_key_image - KI_1, the first spent RingCT key image in a tx
@@ -162,6 +169,16 @@ void make_carrot_onetime_address_extension_g(const crypto::hash &s_sender_receiv
 void make_carrot_onetime_address_extension_t(const crypto::hash &s_sender_receiver,
     const rct::key &amount_commitment,
     crypto::secret_key &sender_extension_out);
+ /**
+-* brief: make_carrot_onetime_address_extension_rp - create a return_payment scalar
+-*    k_rp = H_n("..rp..", s^ctx_sr, C_a)
+-* param: s_sender_receiver - s^ctx_sr
+-* param: amount_commitment - C_a
+-* outparam: sender_extension_pubkey_out - k_rp
+-*/
+void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_receiver,
+    const rct::key &amount_commitment,
+    crypto::secret_key &sender_extension_out);
 /**
 * brief: make_carrot_onetime_address_extension_pubkey - create a FCMP++ onetime address extension pubkey
 *    K^o_ext = k^o_g G + k^o_t T
@@ -184,6 +201,20 @@ void make_carrot_onetime_address(const crypto::public_key &address_spend_pubkey,
     const crypto::hash &s_sender_receiver,
     const rct::key &amount_commitment,
     crypto::public_key &onetime_address_out);
+/**
+* brief: make_sparc_return_address - create a onetime address to return a payment
+*    Kr = Kc + K^o_ext = Kc + (k^o_g G + k^o_t T)
+* param: address_spend_pubkey - Kc (spend pubkey is the change output onetime address from origin TX)
+* param: s_sender_receiver - s^ctx_sr
+* param: input_context - L_0 (the key image of only input to the TX - the output being returned)
+* param: amount_commitment - C_a
+* outparam: return_address_out - Kr
+*/
+void make_sparc_return_address(const crypto::public_key &address_spend_pubkey,
+                               const crypto::hash &s_sender_receiver,
+                               const input_context_t &input_context,
+                               const rct::key &amount_commitment,
+                               crypto::public_key &return_address_out);
 /**
 * brief: make_carrot_amount_blinding_factor - create blinding factor for enote's amount commitment C_a
 *   k_a = H_n(s^ctx_sr, a, K^j_s, enote_type)
@@ -296,7 +327,7 @@ payment_id_t decrypt_legacy_payment_id(const encrypted_payment_id_t encrypted_pa
     const crypto::public_key &onetime_address);
 /**
  * brief: make_carrot_janus_anchor_special - make a janus anchor for "special" enotes
- *   anchor_sp = H_16(D_e, input_context, Ko, k_v)
+ *   anchor_sp = H_16(D_e, input_context, Ko, k_v, K_s)
  * param: enote_ephemeral_pubkey - D_e
  * param: input_context -
  * param: onetime_address - Ko

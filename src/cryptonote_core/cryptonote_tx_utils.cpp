@@ -55,67 +55,6 @@ using namespace crypto;
 
 namespace cryptonote
 {
-  rct::key sm(rct::key y, int n, const rct::key &x)
-  {
-    while (n--)
-      sc_mul(y.bytes, y.bytes, y.bytes);
-    sc_mul(y.bytes, y.bytes, x.bytes);
-    return y;
-  }
-
-  // Compute the inverse of a scalar, the clever way
-  rct::key invert(const rct::key &x)
-  {
-    rct::key _1, _10, _100, _11, _101, _111, _1001, _1011, _1111;
-
-    _1 = x;
-    sc_mul(_10.bytes, _1.bytes, _1.bytes);
-    sc_mul(_100.bytes, _10.bytes, _10.bytes);
-    sc_mul(_11.bytes, _10.bytes, _1.bytes);
-    sc_mul(_101.bytes, _10.bytes, _11.bytes);
-    sc_mul(_111.bytes, _10.bytes, _101.bytes);
-    sc_mul(_1001.bytes, _10.bytes, _111.bytes);
-    sc_mul(_1011.bytes, _10.bytes, _1001.bytes);
-    sc_mul(_1111.bytes, _100.bytes, _1011.bytes);
-
-    rct::key inv;
-    sc_mul(inv.bytes, _1111.bytes, _1.bytes);
-
-    inv = sm(inv, 123 + 3, _101);
-    inv = sm(inv, 2 + 2, _11);
-    inv = sm(inv, 1 + 4, _1111);
-    inv = sm(inv, 1 + 4, _1111);
-    inv = sm(inv, 4, _1001);
-    inv = sm(inv, 2, _11);
-    inv = sm(inv, 1 + 4, _1111);
-    inv = sm(inv, 1 + 3, _101);
-    inv = sm(inv, 3 + 3, _101);
-    inv = sm(inv, 3, _111);
-    inv = sm(inv, 1 + 4, _1111);
-    inv = sm(inv, 2 + 3, _111);
-    inv = sm(inv, 2 + 2, _11);
-    inv = sm(inv, 1 + 4, _1011);
-    inv = sm(inv, 2 + 4, _1011);
-    inv = sm(inv, 6 + 4, _1001);
-    inv = sm(inv, 2 + 2, _11);
-    inv = sm(inv, 3 + 2, _11);
-    inv = sm(inv, 3 + 2, _11);
-    inv = sm(inv, 1 + 4, _1001);
-    inv = sm(inv, 1 + 3, _111);
-    inv = sm(inv, 2 + 4, _1111);
-    inv = sm(inv, 1 + 4, _1011);
-    inv = sm(inv, 3, _101);
-    inv = sm(inv, 2 + 4, _1111);
-    inv = sm(inv, 3, _101);
-    inv = sm(inv, 1 + 2, _11);
-
-    // Sanity check for successful inversion
-    rct::key tmp;
-    sc_mul(tmp.bytes, inv.bytes, x.bytes);
-    CHECK_AND_ASSERT_THROW_MES(tmp == rct::identity(), "invert failed");
-    return inv;
-  }
-
   //---------------------------------------------------------------
   void classify_addresses(const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::account_public_address>& change_addr, size_t &num_stdaddresses, size_t &num_subaddresses, account_public_address &single_dest_subaddress)
   {

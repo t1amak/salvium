@@ -79,7 +79,7 @@ namespace test
         std::string source_asset = "SAL";
         std::string dest_asset = "SAL";
 
-        if (!cryptonote::construct_tx_and_get_tx_key(from, subaddresses, actual_sources, to, 4/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, boost::none, {}, tx, 0, tx_key, extra_keys, rct, { bulletproof ? rct::RangeProofBulletproof : rct::RangeProofBorromean, bulletproof ? 4 : 0 }))
+        if (!cryptonote::construct_tx_and_get_tx_key(from, subaddresses, actual_sources, to, 4/*hf_version*/, source_asset, dest_asset, cryptonote::transaction_type::TRANSFER, boost::none, {}, tx, 0, tx_key, extra_keys, rct, { bulletproof ? rct::RangeProofPaddedBulletproof : rct::RangeProofBorromean, bulletproof ? 4 : 0 }))
             throw std::runtime_error{"transfer transaction construction error"};
 
         return tx;

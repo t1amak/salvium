@@ -157,6 +157,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     const std::optional<encrypted_payment_id_t> &dummy_encrypted_payment_id,
     const view_balance_secret_device *s_view_balance_dev,
     const view_incoming_key_device *k_view_dev,
+    const crypto::public_key &account_spend_pubkey,
     const crypto::key_image &tx_first_key_image,
     std::vector<RCTOutputEnoteProposal> &output_enote_proposals_out,
     encrypted_payment_id_t &encrypted_payment_id_out)
@@ -203,9 +204,10 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     {
         encrypted_payment_id_t encrypted_payment_id;
         get_output_proposal_normal_v1(normal_payment_proposals[i],
-            tx_first_key_image,
-            tools::add_element(output_enote_proposals_out),
-            encrypted_payment_id);
+                                      tx_first_key_image,
+                                      *k_view_dev,
+                                      tools::add_element(output_enote_proposals_out),
+                                      encrypted_payment_id);
 
         // set pid_enc from integrated address proposal pic_enc
         const bool is_integrated = normal_payment_proposals[i].destination.payment_id != null_payment_id;
@@ -241,6 +243,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         {
             get_output_proposal_special_v1(selfsend_payment_proposal,
                 *k_view_dev,
+                account_spend_pubkey,
                 tx_first_key_image,
                 other_enote_ephemeral_pubkey,
                 tools::add_element(output_enote_proposals_out));

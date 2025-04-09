@@ -92,6 +92,7 @@ tools::optional_variant<CarrotPaymentProposalV1, CarrotPaymentProposalSelfSendV1
  * param: dummy_encrypted_payment_id - random pid_enc, required if no integrated addresses in normal payment proposals
  * param: s_view_balance_dev - pointer to view-balance device (OPTIONAL)
  * param: k_view_dev - pointer to view-incoming device (OPTIONAL)
+ * param: account_spend_pubkey - K_s
  * param: tx_first_key_image - KI_1
  * outparam: output_enote_proposals_out -
  * outparam: encrypted_payment_id_out - pid_enc
@@ -105,6 +106,7 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
     const std::optional<encrypted_payment_id_t> &dummy_encrypted_payment_id,
     const view_balance_secret_device *s_view_balance_dev,
     const view_incoming_key_device *k_view_dev,
+    const crypto::public_key &account_spend_pubkey,
     const crypto::key_image &tx_first_key_image,
     std::vector<RCTOutputEnoteProposal> &output_enote_proposals_out,
     encrypted_payment_id_t &encrypted_payment_id_out);

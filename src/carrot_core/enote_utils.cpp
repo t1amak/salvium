@@ -180,6 +180,14 @@ void make_carrot_input_context_coinbase(const std::uint64_t block_index, input_c
     memcpy_swap64le(input_context_out.bytes + 1, &block_index, 1);
 }
 //-------------------------------------------------------------------------------------------------------------------
+void make_carrot_input_context_protocol(const std::uint64_t block_index, input_context_t &input_context_out)
+{
+    // input_context = "P" || IntToBytes256(block_index)
+    memset(input_context_out.bytes, 0, sizeof(input_context_t));
+    input_context_out.bytes[0] = CARROT_DOMAIN_SEP_INPUT_CONTEXT_PROTOCOL;
+    memcpy_swap64le(input_context_out.bytes + 1, &block_index, 1);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void make_carrot_input_context(const crypto::key_image &first_rct_key_image, input_context_t &input_context_out)
 {
     // input_context = "R" || KI_1
@@ -213,6 +221,15 @@ void make_carrot_onetime_address_extension_t(const crypto::hash &s_sender_receiv
 {
     // k^o_t = H_n("..t..", s^ctx_sr, C_a)
     const auto transcript = sp::make_fixed_transcript<CARROT_DOMAIN_SEP_ONETIME_EXTENSION_T>(amount_commitment);
+    derive_scalar(transcript.data(), transcript.size(), &s_sender_receiver, &sender_extension_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_receiver,
+                                              const crypto::key_image &first_key_image,
+                                              crypto::secret_key &sender_extension_out)
+{
+    // k^rp = H_n("..rp..", s^ctx_sr, L_0)
+    const auto transcript = sp::make_fixed_transcript<CARROT_DOMAIN_SEP_ONETIME_EXTENSION_RP>(first_key_image);
     derive_scalar(transcript.data(), transcript.size(), &s_sender_receiver, &sender_extension_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -250,6 +267,31 @@ void make_carrot_onetime_address(const crypto::public_key &address_spend_pubkey,
     // Ko = K^j_s + K^o_ext
     onetime_address_out = rct::rct2pk(rct::addKeys(
         rct::pk2rct(address_spend_pubkey), rct::pk2rct(sender_extension_pubkey)));
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_sparc_return_address(const crypto::public_key &address_spend_pubkey,
+                               const crypto::hash &s_sender_receiver,
+                               const crypto::key_image &first_key_image,
+                               const rct::key &amount_commitment,
+                               crypto::public_key &return_address_out)
+{
+    // Calculate the k_rp value
+    crypto::secret_key k_rp;
+    make_carrot_onetime_address_extension_rp(s_sender_receiver, first_key_image, k_rp);
+
+    // Calculate the multiplicative inverse of k_rp (k_rp^-1)
+    crypto::secret_key k_inv_rp = rct::rct2sk(rct::invert(rct::sk2rct(k_rp)));
+
+    // Calculate the K_sra value (K_sra = K_c + sra_g.G + sra_t.T)
+    crypto::public_key K_sra = crypto::null_pkey;
+    make_carrot_onetime_address(address_spend_pubkey, s_sender_receiver, amount_commitment, K_sra);
+
+    // Calculate the return_address (K_r = (k_rp^-1).K_sra)
+    ge_p3 K_sra_p3;
+    ge_frombytes_vartime(&K_sra_p3, to_bytes(K_sra));
+    ge_p3 K_r_p3;
+    ge_scalarmult_p3(&K_r_p3, to_bytes(k_inv_rp), &K_sra_p3);
+    ge_p3_tobytes((unsigned char *)(return_address_out.data), &K_r_p3);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_carrot_amount_blinding_factor(const crypto::hash &s_sender_receiver,

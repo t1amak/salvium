@@ -494,6 +494,7 @@ void make_pruned_transaction_from_carrot_proposal_v1(const CarrotTransactionProp
         tx_proposal.dummy_encrypted_payment_id,
         s_view_balance_dev,
         k_view_dev,
+        account_spend_pubkey,
         tx_proposal.key_images_sorted.at(0),
         output_enote_proposals,
         encrypted_payment_id);

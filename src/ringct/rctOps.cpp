@@ -725,4 +725,67 @@ namespace rct {
           sc_sub(masked.amount.bytes, masked.amount.bytes, sharedSec2.bytes);
         }
     }
+
+    key sm(key y, int n, const key &x) {
+      while (n--)
+        sc_mul(y.bytes, y.bytes, y.bytes);
+      sc_mul(y.bytes, y.bytes, x.bytes);
+      return y;
+    }
+
+    // Compute the inverse of a scalar, the clever way
+    key invert(const key &x) {
+      
+      key _1, _10, _100, _11, _101, _111, _1001, _1011, _1111;
+
+      _1 = x;
+      sc_mul(_10.bytes, _1.bytes, _1.bytes);
+      sc_mul(_100.bytes, _10.bytes, _10.bytes);
+      sc_mul(_11.bytes, _10.bytes, _1.bytes);
+      sc_mul(_101.bytes, _10.bytes, _11.bytes);
+      sc_mul(_111.bytes, _10.bytes, _101.bytes);
+      sc_mul(_1001.bytes, _10.bytes, _111.bytes);
+      sc_mul(_1011.bytes, _10.bytes, _1001.bytes);
+      sc_mul(_1111.bytes, _100.bytes, _1011.bytes);
+
+      key inv;
+      sc_mul(inv.bytes, _1111.bytes, _1.bytes);
+      
+      inv = sm(inv, 123 + 3, _101);
+      inv = sm(inv, 2 + 2, _11);
+      inv = sm(inv, 1 + 4, _1111);
+      inv = sm(inv, 1 + 4, _1111);
+      inv = sm(inv, 4, _1001);
+      inv = sm(inv, 2, _11);
+      inv = sm(inv, 1 + 4, _1111);
+      inv = sm(inv, 1 + 3, _101);
+      inv = sm(inv, 3 + 3, _101);
+      inv = sm(inv, 3, _111);
+      inv = sm(inv, 1 + 4, _1111);
+      inv = sm(inv, 2 + 3, _111);
+      inv = sm(inv, 2 + 2, _11);
+      inv = sm(inv, 1 + 4, _1011);
+      inv = sm(inv, 2 + 4, _1011);
+      inv = sm(inv, 6 + 4, _1001);
+      inv = sm(inv, 2 + 2, _11);
+      inv = sm(inv, 3 + 2, _11);
+      inv = sm(inv, 3 + 2, _11);
+      inv = sm(inv, 1 + 4, _1001);
+      inv = sm(inv, 1 + 3, _111);
+      inv = sm(inv, 2 + 4, _1111);
+      inv = sm(inv, 1 + 4, _1011);
+      inv = sm(inv, 3, _101);
+      inv = sm(inv, 2 + 4, _1111);
+      inv = sm(inv, 3, _101);
+      inv = sm(inv, 1 + 2, _11);
+      
+      //ASSERT_EQ(memcmp(tmp.bytes, I.bytes, 32), 0);
+#ifdef DEBUG_BP
+      // Sanity check for successful inversion
+      key tmp;
+      sc_mul(tmp.bytes, inv.bytes, x.bytes);
+      CHECK_AND_ASSERT_THROW_MES(tmp == rct::identity(), "invert failed");
+#endif
+      return inv;
+    }
 }

@@ -45,6 +45,7 @@ namespace carrot
 static constexpr const unsigned char CARROT_DOMAIN_SEP_AMOUNT_BLINDING_FACTOR[] = "Carrot commitment mask";
 static constexpr const unsigned char CARROT_DOMAIN_SEP_ONETIME_EXTENSION_G[] = "Carrot key extension G";
 static constexpr const unsigned char CARROT_DOMAIN_SEP_ONETIME_EXTENSION_T[] = "Carrot key extension T";
+static constexpr const unsigned char CARROT_DOMAIN_SEP_ONETIME_EXTENSION_RP[] = "Carrot key extension RP";
 static constexpr const unsigned char CARROT_DOMAIN_SEP_ENCRYPTION_MASK_ANCHOR[] = "Carrot encryption mask anchor";
 static constexpr const unsigned char CARROT_DOMAIN_SEP_ENCRYPTION_MASK_AMOUNT[] = "Carrot encryption mask a";
 static constexpr const unsigned char CARROT_DOMAIN_SEP_ENCRYPTION_MASK_PAYMENT_ID[] = "Carrot encryption mask pid";
@@ -53,6 +54,7 @@ static constexpr const unsigned char CARROT_DOMAIN_SEP_EPHEMERAL_PRIVKEY[] = "Ca
 static constexpr const unsigned char CARROT_DOMAIN_SEP_VIEW_TAG[] = "Carrot view tag";
 static constexpr const unsigned char CARROT_DOMAIN_SEP_SENDER_RECEIVER_SECRET[] = "Carrot sender-receiver secret";
 static constexpr const unsigned char CARROT_DOMAIN_SEP_INPUT_CONTEXT_COINBASE = 'C';
+static constexpr const unsigned char CARROT_DOMAIN_SEP_INPUT_CONTEXT_PROTOCOL = 'P';
 static constexpr const unsigned char CARROT_DOMAIN_SEP_INPUT_CONTEXT_RINGCT = 'R';
 
 // Carrot account secret domain separators
