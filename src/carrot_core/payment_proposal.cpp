@@ -404,7 +404,6 @@ void get_protocol_output_proposal_v1(const CarrotPaymentProposalV1 &proposal,
 //-------------------------------------------------------------------------------------------------------------------
 void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
                                    const crypto::key_image &tx_first_key_image,
-                                   const view_incoming_key_device &k_view_dev,
                                    RCTOutputEnoteProposal &output_enote_out,
                                    encrypted_payment_id_t &encrypted_payment_id_out)
 {
@@ -449,14 +448,10 @@ void get_output_proposal_normal_v1(const CarrotPaymentProposalV1 &proposal,
     // 6. save the amount and first key image
     output_enote_out.amount                   = proposal.amount;
     output_enote_out.enote.tx_first_key_image = tx_first_key_image;
-
-    // 7. calculate the F point for this proposal
-    //get_return_address_f_point(s_sender_receiver, output_enote_out.enote.amount_commitment, proposal.change_onetime_address, k_view_dev, output_enote_out.enote.F_point);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void get_output_proposal_return_v1(const CarrotPaymentProposalReturnV1 &proposal,
                                    const crypto::key_image &tx_first_key_image,
-                                   const view_incoming_key_device &k_view_dev,
                                    RCTOutputEnoteProposal &output_enote_out,
                                    encrypted_payment_id_t &encrypted_payment_id_out)
 {
@@ -511,9 +506,6 @@ void get_output_proposal_return_v1(const CarrotPaymentProposalReturnV1 &proposal
     // 6. save the amount and first key image
     output_enote_out.amount                   = proposal.amount;
     output_enote_out.enote.tx_first_key_image = tx_first_key_image;
-
-    // 9. calculate the F point for this proposal
-    //get_return_address_f_point(s_sender_receiver, output_enote_out.enote.amount_commitment, proposal.change_onetime_address, k_view_dev, output_enote_out.enote.F_point);
 }
 //-------------------------------------------------------------------------------------------------------------------
 void get_output_proposal_special_v1(const CarrotPaymentProposalSelfSendV1 &proposal,

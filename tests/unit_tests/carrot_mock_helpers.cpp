@@ -325,17 +325,18 @@ void mock_scan_enote_set(const std::vector<CarrotEnoteV1> &enotes,
         scan_result.output_index = output_index;
 
         if (try_scan_carrot_enote_external(enote,
-            encrypted_payment_id,
-            s_sr,
-            keys.k_view_incoming_dev,
-            {main_address_spend_pubkeys, 2},
-            scan_result.sender_extension_g,
-            scan_result.sender_extension_t,
-            scan_result.address_spend_pubkey,
-            scan_result.amount,
-            scan_result.amount_blinding_factor,
-            scan_result.payment_id,
-            scan_result.enote_type))
+                                           encrypted_payment_id,
+                                           s_sr,
+                                           keys.k_view_incoming_dev,
+                                           {main_address_spend_pubkeys, 2},
+                                           scan_result.sender_extension_g,
+                                           scan_result.sender_extension_t,
+                                           scan_result.address_spend_pubkey,
+                                           scan_result.amount,
+                                           scan_result.amount_blinding_factor,
+                                           scan_result.payment_id,
+                                           scan_result.enote_type,
+                                           scan_result.return_address_pubkey))
         {
             res.push_back(scan_result);
             continue;

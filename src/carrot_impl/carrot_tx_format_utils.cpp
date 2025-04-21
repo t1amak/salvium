@@ -177,7 +177,6 @@ cryptonote::transaction store_carrot_to_transaction_v1(const std::vector<CarrotE
         tx.vout.push_back(cryptonote::tx_out{0, cryptonote::txout_to_carrot_v1{
             .key = enote.onetime_address,
             .asset_type = "SAL1",
-            .unlock_time = 0,
             .view_tag = enote.view_tag,
             .encrypted_janus_anchor = enote.anchor_enc
         }});
@@ -314,7 +313,6 @@ cryptonote::transaction store_carrot_to_coinbase_transaction_v1(
             cryptonote::txout_to_carrot_v1{
                 .key = enote.onetime_address,
                 .asset_type = "SAL1",
-                .unlock_time = 0,
                 .view_tag = enote.view_tag,
                 .encrypted_janus_anchor = enote.anchor_enc
             }

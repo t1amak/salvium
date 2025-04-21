@@ -132,6 +132,7 @@ struct mock_scan_result_t
     crypto::public_key address_spend_pubkey;
     crypto::secret_key sender_extension_g;
     crypto::secret_key sender_extension_t;
+    crypto::public_key return_address_pubkey;
 
     rct::xmr_amount amount;
     crypto::secret_key amount_blinding_factor;

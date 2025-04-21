@@ -40,20 +40,20 @@
 namespace carrot
 {
   /**
-   * brief: make_carrot_spend_authority_proof - generate the zero-knowledge proof for spend authority for Carrot output pubkey
+   * brief: make_sparc_spend_authority_proof - generate the zero-knowledge proof for spend authority for SPARC output pubkey
    * param: x - G-term for the given output key
    * param: y - T-term for the given output key
    * param: K_o - output key to generate spend authority proof for
    * outparam: proof_out - the complete spend authority proof
    */
-  void make_carrot_spend_authority_proof(const rct::key &x, const rct::key &y, const rct::key &K_o, rct::zk_proof &proof_out);
+  void make_sparc_spend_authority_proof(const rct::key &x, const rct::key &y, const rct::key &K_o, rct::zk_proof &proof_out);
 
   /**
-   * brief: verify_carrot_spend_authority_proof - verify the zero-knowledge proof for spend authority for Carrot output pubkey
+   * brief: verify_sparc_spend_authority_proof - verify the zero-knowledge proof for spend authority for SPARC output pubkey
    * param: proof - the zero-knowledge proof to verify
    * param: K_o - output key to verify the spend authority proof for
    * return: true if proof is valid, false otherwise
    */
-  bool verify_carrot_spend_authority_proof(const rct::zk_proof &proof, const rct::key &K_o);
+  bool verify_sparc_spend_authority_proof(const rct::zk_proof &proof, const rct::key &K_o);
 
 } //namespace carrot

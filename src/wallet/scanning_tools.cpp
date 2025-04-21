@@ -262,14 +262,15 @@ std::optional<enote_view_incoming_scan_info_t> try_view_incoming_scan_enote_dest
             // try Carrot view-scan w/o amount commitment recomputation
             carrot::payment_id_t carrot_payment_id;
             if (!carrot::try_scan_carrot_enote_external_destination_only(enote,
-                    encrypted_carrot_payment_id,
-                    s_sender_receiver_unctx,
-                    k_view_dev,
-                    acc.m_account_address.m_spend_public_key,
-                    res.sender_extension_g,
-                    res.sender_extension_t,
-                    res.address_spend_pubkey,
-                    carrot_payment_id))
+                                                                         encrypted_carrot_payment_id,
+                                                                         s_sender_receiver_unctx,
+                                                                         k_view_dev,
+                                                                         acc.m_account_address.m_spend_public_key,
+                                                                         res.sender_extension_g,
+                                                                         res.sender_extension_t,
+                                                                         res.address_spend_pubkey,
+                                                                         carrot_payment_id,
+                                                                         res.return_address))
                 return std::nullopt;
 
             memcpy(&res.payment_id, &carrot_payment_id, sizeof(carrot_payment_id));

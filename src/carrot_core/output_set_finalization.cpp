@@ -205,7 +205,6 @@ void get_output_enote_proposals(const std::vector<CarrotPaymentProposalV1> &norm
         encrypted_payment_id_t encrypted_payment_id;
         get_output_proposal_normal_v1(normal_payment_proposals[i],
                                       tx_first_key_image,
-                                      *k_view_dev,
                                       tools::add_element(output_enote_proposals_out),
                                       encrypted_payment_id);
 

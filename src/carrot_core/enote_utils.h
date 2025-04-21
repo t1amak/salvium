@@ -173,11 +173,11 @@ void make_carrot_onetime_address_extension_t(const crypto::hash &s_sender_receiv
 -* brief: make_carrot_onetime_address_extension_rp - create a return_payment scalar
 -*    k_rp = H_n("..rp..", s^ctx_sr, C_a)
 -* param: s_sender_receiver - s^ctx_sr
--* param: amount_commitment - C_a
+-* param: input_context = "R" || KI_1
 -* outparam: sender_extension_pubkey_out - k_rp
 -*/
 void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_receiver,
-    const rct::key &amount_commitment,
+    const input_context_t &input_context,
     crypto::secret_key &sender_extension_out);
 /**
 * brief: make_carrot_onetime_address_extension_pubkey - create a FCMP++ onetime address extension pubkey

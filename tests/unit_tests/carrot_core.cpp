@@ -113,7 +113,6 @@ TEST(carrot_core, main_address_normal_scan_completeness)
     encrypted_payment_id_t encrypted_payment_id;
     get_output_proposal_normal_v1(proposal,
         tx_first_key_image,
-        keys.k_view_incoming_dev,
         enote_proposal,
         encrypted_payment_id);
 
@@ -133,18 +132,20 @@ TEST(carrot_core, main_address_normal_scan_completeness)
     crypto::secret_key recovered_amount_blinding_factor;
     encrypted_payment_id_t recovered_payment_id;
     CarrotEnoteType recovered_enote_type;
+    crypto::public_key recovered_return_address_pubkey;
     const bool scan_success = try_scan_carrot_enote_external(enote_proposal.enote,
-        encrypted_payment_id,
-        s_sender_receiver_unctx,
-        keys.k_view_incoming_dev,
-        keys.carrot_account_spend_pubkey,
-        recovered_sender_extension_g,
-        recovered_sender_extension_t,
-        recovered_address_spend_pubkey,
-        recovered_amount,
-        recovered_amount_blinding_factor,
-        recovered_payment_id,
-        recovered_enote_type);
+                                                             encrypted_payment_id,
+                                                             s_sender_receiver_unctx,
+                                                             keys.k_view_incoming_dev,
+                                                             keys.carrot_account_spend_pubkey,
+                                                             recovered_sender_extension_g,
+                                                             recovered_sender_extension_t,
+                                                             recovered_address_spend_pubkey,
+                                                             recovered_amount,
+                                                             recovered_amount_blinding_factor,
+                                                             recovered_payment_id,
+                                                             recovered_enote_type,
+                                                             recovered_return_address_pubkey);
     
     ASSERT_TRUE(scan_success);
 
@@ -184,7 +185,6 @@ TEST(carrot_core, subaddress_normal_scan_completeness)
     encrypted_payment_id_t encrypted_payment_id;
     get_output_proposal_normal_v1(proposal,
         tx_first_key_image,
-        keys.k_view_incoming_dev,
         enote_proposal,
         encrypted_payment_id);
 
@@ -204,18 +204,20 @@ TEST(carrot_core, subaddress_normal_scan_completeness)
     crypto::secret_key recovered_amount_blinding_factor;
     encrypted_payment_id_t recovered_payment_id;
     CarrotEnoteType recovered_enote_type;
+    crypto::public_key recovered_return_address_pubkey;
     const bool scan_success = try_scan_carrot_enote_external(enote_proposal.enote,
-        encrypted_payment_id,
-        s_sender_receiver_unctx,
-        keys.k_view_incoming_dev,
-        keys.carrot_account_spend_pubkey,
-        recovered_sender_extension_g,
-        recovered_sender_extension_t,
-        recovered_address_spend_pubkey,
-        recovered_amount,
-        recovered_amount_blinding_factor,
-        recovered_payment_id,
-        recovered_enote_type);
+                                                             encrypted_payment_id,
+                                                             s_sender_receiver_unctx,
+                                                             keys.k_view_incoming_dev,
+                                                             keys.carrot_account_spend_pubkey,
+                                                             recovered_sender_extension_g,
+                                                             recovered_sender_extension_t,
+                                                             recovered_address_spend_pubkey,
+                                                             recovered_amount,
+                                                             recovered_amount_blinding_factor,
+                                                             recovered_payment_id,
+                                                             recovered_enote_type,
+                                                             recovered_return_address_pubkey);
     
     ASSERT_TRUE(scan_success);
 
@@ -252,7 +254,6 @@ TEST(carrot_core, integrated_address_normal_scan_completeness)
     encrypted_payment_id_t encrypted_payment_id;
     get_output_proposal_normal_v1(proposal,
         tx_first_key_image,
-        keys.k_view_incoming_dev,
         enote_proposal,
         encrypted_payment_id);
 
@@ -272,18 +273,20 @@ TEST(carrot_core, integrated_address_normal_scan_completeness)
     crypto::secret_key recovered_amount_blinding_factor;
     encrypted_payment_id_t recovered_payment_id;
     CarrotEnoteType recovered_enote_type;
+    crypto::public_key recovered_return_address_pubkey;
     const bool scan_success = try_scan_carrot_enote_external(enote_proposal.enote,
-        encrypted_payment_id,
-        s_sender_receiver_unctx,
-        keys.k_view_incoming_dev,
-        keys.carrot_account_spend_pubkey,
-        recovered_sender_extension_g,
-        recovered_sender_extension_t,
-        recovered_address_spend_pubkey,
-        recovered_amount,
-        recovered_amount_blinding_factor,
-        recovered_payment_id,
-        recovered_enote_type);
+                                                             encrypted_payment_id,
+                                                             s_sender_receiver_unctx,
+                                                             keys.k_view_incoming_dev,
+                                                             keys.carrot_account_spend_pubkey,
+                                                             recovered_sender_extension_g,
+                                                             recovered_sender_extension_t,
+                                                             recovered_address_spend_pubkey,
+                                                             recovered_amount,
+                                                             recovered_amount_blinding_factor,
+                                                             recovered_payment_id,
+                                                             recovered_enote_type,
+                                                             recovered_return_address_pubkey);
     
     ASSERT_TRUE(scan_success);
 
@@ -344,18 +347,20 @@ TEST(carrot_core, main_address_special_scan_completeness)
         crypto::secret_key recovered_amount_blinding_factor;
         encrypted_payment_id_t recovered_payment_id;
         CarrotEnoteType recovered_enote_type;
+        crypto::public_key recovered_return_address_pubkey;
         const bool scan_success = try_scan_carrot_enote_external(enote_proposal.enote,
-            std::nullopt,
-            s_sender_receiver_unctx,
-            keys.k_view_incoming_dev,
-            keys.carrot_account_spend_pubkey,
-            recovered_sender_extension_g,
-            recovered_sender_extension_t,
-            recovered_address_spend_pubkey,
-            recovered_amount,
-            recovered_amount_blinding_factor,
-            recovered_payment_id,
-            recovered_enote_type);
+                                                                 std::nullopt,
+                                                                 s_sender_receiver_unctx,
+                                                                 keys.k_view_incoming_dev,
+                                                                 keys.carrot_account_spend_pubkey,
+                                                                 recovered_sender_extension_g,
+                                                                 recovered_sender_extension_t,
+                                                                 recovered_address_spend_pubkey,
+                                                                 recovered_amount,
+                                                                 recovered_amount_blinding_factor,
+                                                                 recovered_payment_id,
+                                                                 recovered_enote_type,
+                                                                 recovered_return_address_pubkey);
         
         ASSERT_TRUE(scan_success);
 
@@ -422,18 +427,20 @@ TEST(carrot_core, subaddress_special_scan_completeness)
         crypto::secret_key recovered_amount_blinding_factor;
         encrypted_payment_id_t recovered_payment_id;
         CarrotEnoteType recovered_enote_type;
+        crypto::public_key recovered_return_address_pubkey;
         const bool scan_success = try_scan_carrot_enote_external(enote_proposal.enote,
-            std::nullopt,
-            s_sender_receiver_unctx,
-            keys.k_view_incoming_dev,
-            keys.carrot_account_spend_pubkey,
-            recovered_sender_extension_g,
-            recovered_sender_extension_t,
-            recovered_address_spend_pubkey,
-            recovered_amount,
-            recovered_amount_blinding_factor,
-            recovered_payment_id,
-            recovered_enote_type);
+                                                                 std::nullopt,
+                                                                 s_sender_receiver_unctx,
+                                                                 keys.k_view_incoming_dev,
+                                                                 keys.carrot_account_spend_pubkey,
+                                                                 recovered_sender_extension_g,
+                                                                 recovered_sender_extension_t,
+                                                                 recovered_address_spend_pubkey,
+                                                                 recovered_amount,
+                                                                 recovered_amount_blinding_factor,
+                                                                 recovered_payment_id,
+                                                                 recovered_enote_type,
+                                                                 recovered_return_address_pubkey);
         
         ASSERT_TRUE(scan_success);
 

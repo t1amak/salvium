@@ -54,7 +54,7 @@ namespace carrot
 // - view tag
 // - ephemeral pubkey
 // - tx first key image
-// - SPARC F-point
+// - Salvium asset_type
 ///
 struct CarrotEnoteV1 final
 {
@@ -72,8 +72,6 @@ struct CarrotEnoteV1 final
     mx25519_pubkey enote_ephemeral_pubkey;
     /// L_0
     crypto::key_image tx_first_key_image;
-    /// F
-    crypto::public_key F_point;
     /// Asset_type
     std::string asset_type;
 };

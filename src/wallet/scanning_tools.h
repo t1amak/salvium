@@ -74,6 +74,12 @@ struct enote_view_incoming_scan_info_t
     std::size_t local_output_index;
     //
     std::size_t main_tx_pubkey_index;
+
+    // asset type for Salvium
+    std::string asset_type;
+
+    // SPARC K_sra
+    crypto::public_key return_address;
 };
 
 std::optional<enote_view_incoming_scan_info_t> try_view_incoming_scan_enote_destination(

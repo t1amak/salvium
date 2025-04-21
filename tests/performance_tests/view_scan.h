@@ -222,7 +222,6 @@ public:
         carrot::RCTOutputEnoteProposal output_proposal;
         carrot::get_output_proposal_normal_v1(payment_proposal,
                                               {},
-                                              m_k_view_dev,
                                               output_proposal,
                                               m_encrypted_payment_id);
         m_enote = output_proposal.enote;
@@ -237,18 +236,20 @@ public:
         rct::xmr_amount recovered_amount;
         carrot::payment_id_t recovered_payment_id;
         carrot::CarrotEnoteType recovered_enote_type;
+        crypto::public_key recovered_return_address_pubkey;
         if (!carrot::try_scan_carrot_enote_external(m_enote,
-                m_encrypted_payment_id,
-                s_sender_receiver_unctx,
-                m_k_view_dev,
-                m_account_spend_pubkey,
-                _1,
-                _2,
-                recovered_address_spend_pubkey,
-                recovered_amount,
-                _3,
-                recovered_payment_id,
-                recovered_enote_type))
+                                                    m_encrypted_payment_id,
+                                                    s_sender_receiver_unctx,
+                                                    m_k_view_dev,
+                                                    m_account_spend_pubkey,
+                                                    _1,
+                                                    _2,
+                                                    recovered_address_spend_pubkey,
+                                                    recovered_amount,
+                                                    _3,
+                                                    recovered_payment_id,
+                                                    recovered_enote_type,
+                                                    recovered_return_address_pubkey))
             return false;
 
         if (recovered_address_spend_pubkey != subaddress.address_spend_pubkey)
@@ -281,18 +282,20 @@ public:
         rct::xmr_amount recovered_amount;
         carrot::payment_id_t recovered_payment_id;
         carrot::CarrotEnoteType recovered_enote_type;
+        crypto::public_key recovered_return_address_pubkey;
         const bool scan_success = carrot::try_scan_carrot_enote_external(m_enote,
-            m_encrypted_payment_id,
-            s_sender_receiver_unctx,
-            m_k_view_dev,
-            m_account_spend_pubkey,
-            _1,
-            _2,
-            recovered_address_spend_pubkey,
-            recovered_amount,
-            _3,
-            recovered_payment_id,
-            recovered_enote_type);
+                                                                         m_encrypted_payment_id,
+                                                                         s_sender_receiver_unctx,
+                                                                         m_k_view_dev,
+                                                                         m_account_spend_pubkey,
+                                                                         _1,
+                                                                         _2,
+                                                                         recovered_address_spend_pubkey,
+                                                                         recovered_amount,
+                                                                         _3,
+                                                                         recovered_payment_id,
+                                                                         recovered_enote_type,
+                                                                         recovered_return_address_pubkey);
 
         return scan_success ^ m_test_view_tag_check;
     }

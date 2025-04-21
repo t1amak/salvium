@@ -224,12 +224,12 @@ void make_carrot_onetime_address_extension_t(const crypto::hash &s_sender_receiv
     derive_scalar(transcript.data(), transcript.size(), &s_sender_receiver, &sender_extension_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_receiver,
-                                              const crypto::key_image &first_key_image,
+void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_receiver, 
+                                              const input_context_t &input_context,
                                               crypto::secret_key &sender_extension_out)
 {
     // k^rp = H_n("..rp..", s^ctx_sr, L_0)
-    const auto transcript = sp::make_fixed_transcript<CARROT_DOMAIN_SEP_ONETIME_EXTENSION_RP>(first_key_image);
+    const auto transcript = sp::make_fixed_transcript<CARROT_DOMAIN_SEP_ONETIME_EXTENSION_RP>(input_context);
     derive_scalar(transcript.data(), transcript.size(), &s_sender_receiver, &sender_extension_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -271,13 +271,13 @@ void make_carrot_onetime_address(const crypto::public_key &address_spend_pubkey,
 //-------------------------------------------------------------------------------------------------------------------
 void make_sparc_return_address(const crypto::public_key &address_spend_pubkey,
                                const crypto::hash &s_sender_receiver,
-                               const crypto::key_image &first_key_image,
+                               const input_context_t &input_context,
                                const rct::key &amount_commitment,
                                crypto::public_key &return_address_out)
 {
     // Calculate the k_rp value
     crypto::secret_key k_rp;
-    make_carrot_onetime_address_extension_rp(s_sender_receiver, first_key_image, k_rp);
+    make_carrot_onetime_address_extension_rp(s_sender_receiver, input_context, k_rp);
 
     // Calculate the multiplicative inverse of k_rp (k_rp^-1)
     crypto::secret_key k_inv_rp = rct::rct2sk(rct::invert(rct::sk2rct(k_rp)));

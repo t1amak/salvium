@@ -78,7 +78,7 @@ namespace carrot {
   }
 
   // Function to generate the zero-knowledge proof
-  void make_carrot_spend_authority_proof(const rct::key &x, const rct::key &y, const rct::key &K_o, rct::zk_proof &proof_out) {
+  void make_sparc_spend_authority_proof(const rct::key &x, const rct::key &y, const rct::key &K_o, rct::zk_proof &proof_out) {
   
     // Step 1: Generate random scalars r_x and r_y
     rct::key r_x = rct::skGen(); // Random scalar for G commitment
@@ -114,7 +114,7 @@ namespace carrot {
   }
   
   // Function to verify the zero-knowledge proof
-  bool verify_carrot_spend_authority_proof(const rct::zk_proof &proof, const rct::key &K_o) {
+  bool verify_sparc_spend_authority_proof(const rct::zk_proof &proof, const rct::key &K_o) {
     
     // Step 1: calculate the challenge
     std::vector<rct::key> keys{proof.R, K_o};

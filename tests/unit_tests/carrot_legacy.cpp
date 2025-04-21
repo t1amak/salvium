@@ -90,6 +90,8 @@ struct unittest_legacy_scan_result_t
     payment_id_t payment_id = null_payment_id;
 
     size_t output_index = 0;
+
+    crypto::public_key return_address_pubkey = rct::rct2pk(rct::I);
 };
 static void unittest_legacy_scan_enote_set(const std::vector<CarrotEnoteV1> &enotes,
     const encrypted_payment_id_t encrypted_payment_id,
@@ -111,17 +113,18 @@ static void unittest_legacy_scan_enote_set(const std::vector<CarrotEnoteV1> &eno
 
         unittest_legacy_scan_result_t scan_result{};
         const bool r = try_scan_carrot_enote_external(enote,
-            encrypted_payment_id,
-            s_sr,
-            view_incoming_key_ram_borrowed_device(acb.get_keys().m_view_secret_key),
-            acb.get_keys().m_account_address.m_spend_public_key,
-            scan_result.sender_extension_g,
-            scan_result.sender_extension_t,
-            scan_result.address_spend_pubkey,
-            scan_result.amount,
-            scan_result.amount_blinding_factor,
-            scan_result.payment_id,
-            scan_result.enote_type);
+                                                      encrypted_payment_id,
+                                                      s_sr,
+                                                      view_incoming_key_ram_borrowed_device(acb.get_keys().m_view_secret_key),
+                                                      acb.get_keys().m_account_address.m_spend_public_key,
+                                                      scan_result.sender_extension_g,
+                                                      scan_result.sender_extension_t,
+                                                      scan_result.address_spend_pubkey,
+                                                      scan_result.amount,
+                                                      scan_result.amount_blinding_factor,
+                                                      scan_result.payment_id,
+                                                      scan_result.enote_type,
+                                                      scan_result.return_address_pubkey);
         
         scan_result.output_index = output_index;
 
