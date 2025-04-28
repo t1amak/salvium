@@ -58,7 +58,6 @@ static constexpr const unsigned char CARROT_DOMAIN_SEP_INPUT_CONTEXT_RINGCT = 'R
 
 static constexpr const unsigned char SPARC_DOMAIN_SEP_ONETIME_EXTENSION_G[] = "SPARC key extension G";
 static constexpr const unsigned char SPARC_DOMAIN_SEP_ONETIME_EXTENSION_T[] = "SPARC key extension T";
-static constexpr const unsigned char SPARC_DOMAIN_SEP_ONETIME_EXTENSION_RP[] = "SPARC key extension RP";
 
 // Carrot account secret domain separators
 static constexpr const unsigned char CARROT_DOMAIN_SEP_PROVE_SPEND_KEY[] = "Carrot prove-spend key";

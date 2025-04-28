@@ -131,11 +131,13 @@ mx25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalV1 &proposa
 /**
 * brief: get_enote_ephemeral_pubkey - get the proposal's enote ephemeral pubkey D_e
 * param: proposal -
+* param: enote_ephemeral_privkey - 
 * param: input_context -
 * return: D_e
 */
 mx25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalReturnV1 &proposal,
-    const input_context_t &input_context);
+                                          const crypto::secret_key &enote_ephemeral_privkey,
+                                          const input_context_t &input_context);
 /**
 * brief: get_coinbase_output_proposal_v1 - convert the carrot proposal to a coinbase output proposal
 * param: proposal -

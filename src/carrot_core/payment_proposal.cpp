@@ -144,12 +144,12 @@ static void get_return_proposal_ecdh_parts(const CarrotPaymentProposalReturnV1 &
     mx25519_pubkey &enote_ephemeral_pubkey_out,
     mx25519_pubkey &s_sender_receiver_unctx_out)
 {
-    // 1. d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
+    // 1. d_e = H_n(anchor_norm, input_context, K^j_s, pid))
     const crypto::secret_key enote_ephemeral_privkey = get_enote_ephemeral_privkey(proposal,
         input_context);
 
     // 2. make D_e
-    enote_ephemeral_pubkey_out = get_enote_ephemeral_pubkey(proposal, input_context);
+    enote_ephemeral_pubkey_out = get_enote_ephemeral_pubkey(proposal, enote_ephemeral_privkey, input_context);
 
     // 3. s_sr = 8 d_e ConvertPointE(K^j_v)
     make_carrot_uncontextualized_shared_key_sender(enote_ephemeral_privkey,
@@ -279,11 +279,9 @@ mx25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalV1 &proposa
 }
 //-------------------------------------------------------------------------------------------------------------------
 mx25519_pubkey get_enote_ephemeral_pubkey(const CarrotPaymentProposalReturnV1 &proposal,
-    const input_context_t &input_context)
+                                          const crypto::secret_key &enote_ephemeral_privkey,
+                                          const input_context_t &input_context)
 {
-  // d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
-  const crypto::secret_key enote_ephemeral_privkey{get_enote_ephemeral_privkey(proposal, input_context)};
-
   mx25519_pubkey enote_ephemeral_pubkey;
   // D_e = d_e ConvertPointE(K^{change}_o)
   make_carrot_enote_ephemeral_pubkey_subaddress(enote_ephemeral_privkey,
@@ -490,6 +488,13 @@ void get_output_proposal_return_v1(const CarrotPaymentProposalReturnV1 &proposal
                                        output_enote_out.enote.amount_enc,
                                        encrypted_payment_id_out,
                                        output_enote_out.enote.view_tag);
+
+    // Override the onetime address
+    output_enote_out.enote.onetime_address = proposal.destination_address_onetime_pubkey;
+
+    // Recalculate the view tag : vt = H_3(s_sr || input_context || Ksra)
+    make_carrot_view_tag(s_sender_receiver_unctx.data, input_context, output_enote_out.enote.onetime_address, output_enote_out.enote.view_tag);
+
     // LAND AHOY!!!
     
     // 5. anchor_enc = anchor XOR m_anchor

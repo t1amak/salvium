@@ -126,7 +126,6 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
     alice.generate();
     bob.generate();
 
-    CarrotDestinationV1 alice_address = alice.cryptonote_address();
     CarrotDestinationV1 bob_address = bob.cryptonote_address();
 
     const crypto::key_image tx_first_key_image = rct::rct2ki(rct::pkGen()); 
@@ -296,7 +295,7 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
         recovered_sender_extension_t,
         enote_proposal_out.enote.onetime_address));
     
-    // At this point, Bob has successfully received the payment from Alice, and has access to `F` and `K^{change}_o`
+    // At this point, Bob has successfully received the payment from Alice
     // It is time to return the payment...
 
     // HERE BE DRAGONS!!!
@@ -365,11 +364,12 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
     // ...send the enote as part of a TX...
     
     // HERE BE DRAGONS!!!
-    // SRCG: At this point, Alice has received `enote_return`, and must decode it...
+    // SRCG: At this point, Alice has received `enote_proposal_return`, and must decode it...
     // ... but all she knows is what's in the enote - she has to work out that it is a return on her own!
     // LAND AHOY!!!
-    
-    ASSERT_EQ(recovered_pubkey_return, enote_proposal_return.enote.onetime_address);
+
+    // Check the "hashmap" for a known return_address
+    ASSERT_EQ(recovered_pubkey_return, return_pubkey);
     
     // LAND AHOY!!!
     // 2. scan the enote to see if it belongs to Alice
