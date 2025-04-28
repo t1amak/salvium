@@ -169,16 +169,6 @@ void make_carrot_onetime_address_extension_g(const crypto::hash &s_sender_receiv
 void make_carrot_onetime_address_extension_t(const crypto::hash &s_sender_receiver,
     const rct::key &amount_commitment,
     crypto::secret_key &sender_extension_out);
- /**
--* brief: make_carrot_onetime_address_extension_rp - create a return_payment scalar
--*    k_rp = H_n("..rp..", s^ctx_sr, C_a)
--* param: s_sender_receiver - s^ctx_sr
--* param: input_context = "R" || KI_1
--* outparam: sender_extension_pubkey_out - k_rp
--*/
-void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_receiver,
-    const input_context_t &input_context,
-    crypto::secret_key &sender_extension_out);
 /**
 * brief: make_carrot_onetime_address_extension_pubkey - create a FCMP++ onetime address extension pubkey
 *    K^o_ext = k^o_g G + k^o_t T
@@ -202,18 +192,58 @@ void make_carrot_onetime_address(const crypto::public_key &address_spend_pubkey,
     const rct::key &amount_commitment,
     crypto::public_key &onetime_address_out);
 /**
+* brief: make_sparc_return_address_extension_g - extension for transforming a receiver's spendkey into an
+*        enote one-time address
+*    sra_g = H_n("..g..", s^ctx_sr, K_o)
+* param: s_sender_receiver - s^ctx_sr
+* param: origin_pubkey - K_o
+* outparam: sender_extension_out - k^o_g
+*/
+void make_sparc_return_address_extension_g(const crypto::hash &s_sender_receiver,
+    const rct::key &origin_pubkey,
+    crypto::secret_key &sender_extension_out);
+/**
+* brief: make_sparc_return_address_extension_t - extension for transforming a receiver's spendkey into an
+*        enote one-time address
+*    sra_t = H_n("..t..", s^ctx_sr, K_o)
+* param: s_sender_receiver - s^ctx_sr
+* param: origin_pubkey - K_o
+* outparam: sender_extension_out - k^o_t
+*/
+void make_sparc_return_address_extension_t(const crypto::hash &s_sender_receiver,
+    const rct::key &origin_pubkey,
+    crypto::secret_key &sender_extension_out);
+ /**
+-* brief: make_sparc_return_address_extension_rp - create a return_payment scalar
+-*    k_rp = H_n("..rp..", s^ctx_sr, K_o)
+-* param: s_sender_receiver - s^ctx_sr
+-* param: input_context = "R" || KI_1
+-* outparam: sender_extension_pubkey_out - k_rp
+-*/
+void make_sparc_return_address_extension_rp(const crypto::hash &s_sender_receiver,
+    const input_context_t &input_context,
+    crypto::secret_key &sender_extension_out);
+/**
+* brief: make_sparc_return_address_extension_pubkey - create a FCMP++ onetime address extension pubkey
+*    K^o_ext = sra_g G + sra_t T
+* param: s_sender_receiver - s^ctx_sr
+* param: origin_pubkey - K_o
+* outparam: sender_extension_pubkey_out - K^o_ext
+*/
+void make_sparc_return_address_extension_pubkey(const crypto::hash &s_sender_receiver,
+    const rct::key &origin_pubkey,
+    crypto::public_key &sender_extension_pubkey_out);
+/**
 * brief: make_sparc_return_address - create a onetime address to return a payment
-*    Kr = Kc + K^o_ext = Kc + (k^o_g G + k^o_t T)
+*    Kr = Kc + K^o_ext = Kc + (sra_g G + k^osra_t T)
 * param: address_spend_pubkey - Kc (spend pubkey is the change output onetime address from origin TX)
 * param: s_sender_receiver - s^ctx_sr
-* param: input_context - L_0 (the key image of only input to the TX - the output being returned)
-* param: amount_commitment - C_a
+* param: origin_pubkey - K_o
 * outparam: return_address_out - Kr
 */
 void make_sparc_return_address(const crypto::public_key &address_spend_pubkey,
                                const crypto::hash &s_sender_receiver,
-                               const input_context_t &input_context,
-                               const rct::key &amount_commitment,
+                               const rct::key &origin_pubkey,
                                crypto::public_key &return_address_out);
 /**
 * brief: make_carrot_amount_blinding_factor - create blinding factor for enote's amount commitment C_a

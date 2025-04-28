@@ -263,6 +263,7 @@ bool operator==(const CarrotPaymentProposalSelfSendV1 &a, const CarrotPaymentPro
     return a.destination_address_spend_pubkey == b.destination_address_spend_pubkey &&
            a.amount                           == b.amount &&
            a.enote_type                       == b.enote_type &&
+           a.internal_message                 == b.internal_message &&
            0 == memcmp(&a.enote_ephemeral_pubkey, &b.enote_ephemeral_pubkey, sizeof(mx25519_pubkey));
 }
 //-------------------------------------------------------------------------------------------------------------------
@@ -470,13 +471,6 @@ void get_output_proposal_return_v1(const CarrotPaymentProposalReturnV1 &proposal
         output_enote_out.enote.enote_ephemeral_pubkey,
         s_sender_receiver_unctx);
 
-    // 4. d_e = H_n(anchor_norm, input_context, K^j_s, K^j_v, pid))
-    //        = H_n(anchor_norm, input_context, K^change_o, k_v * K^change_o, pid)
-    //const crypto::secret_key enote_ephemeral_privkey = get_enote_ephemeral_privkey(proposal, input_context);
-
-    // 5. K^return_o = d_e * k_v * K^change_o
-    //crypto::public_key onetime_pubkey = rct::rct2pk(rct::scalarmultKey(rct::pk2rct(proposal.destination_address_onetime_pubkey), rct::sk2rct(enote_ephemeral_privkey)));
-    
     // 4. build the output enote address pieces
     crypto::hash s_sender_receiver; auto q_wiper = auto_wiper(s_sender_receiver);
     // HERE BE DRAGONS!!!

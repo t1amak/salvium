@@ -224,15 +224,6 @@ void make_carrot_onetime_address_extension_t(const crypto::hash &s_sender_receiv
     derive_scalar(transcript.data(), transcript.size(), &s_sender_receiver, &sender_extension_out);
 }
 //-------------------------------------------------------------------------------------------------------------------
-void make_carrot_onetime_address_extension_rp(const crypto::hash &s_sender_receiver, 
-                                              const input_context_t &input_context,
-                                              crypto::secret_key &sender_extension_out)
-{
-    // k^rp = H_n("..rp..", s^ctx_sr, L_0)
-    const auto transcript = sp::make_fixed_transcript<CARROT_DOMAIN_SEP_ONETIME_EXTENSION_RP>(input_context);
-    derive_scalar(transcript.data(), transcript.size(), &s_sender_receiver, &sender_extension_out);
-}
-//-------------------------------------------------------------------------------------------------------------------
 void make_carrot_onetime_address_extension_pubkey(const crypto::hash &s_sender_receiver,
     const rct::key &amount_commitment,
     crypto::public_key &sender_extension_pubkey_out)
@@ -269,12 +260,59 @@ void make_carrot_onetime_address(const crypto::public_key &address_spend_pubkey,
         rct::pk2rct(address_spend_pubkey), rct::pk2rct(sender_extension_pubkey)));
 }
 //-------------------------------------------------------------------------------------------------------------------
+void make_sparc_return_address_extension_g(const crypto::hash &s_sender_receiver,
+    const rct::key &origin_pubkey,
+    crypto::secret_key &sender_extension_out)
+{
+    // sra_g = H_n("..g..", s^ctx_sr, K_o)
+    const auto transcript = sp::make_fixed_transcript<SPARC_DOMAIN_SEP_ONETIME_EXTENSION_G>(origin_pubkey);
+    derive_scalar(transcript.data(), transcript.size(), &s_sender_receiver, &sender_extension_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_sparc_return_address_extension_t(const crypto::hash &s_sender_receiver,
+    const rct::key &origin_pubkey,
+    crypto::secret_key &sender_extension_out)
+{
+    // sra_t = H_n("..t..", s^ctx_sr, K_o)
+    const auto transcript = sp::make_fixed_transcript<CARROT_DOMAIN_SEP_ONETIME_EXTENSION_T>(origin_pubkey);
+    derive_scalar(transcript.data(), transcript.size(), &s_sender_receiver, &sender_extension_out);
+}
+//-------------------------------------------------------------------------------------------------------------------
+void make_sparc_return_address_extension_pubkey(const crypto::hash &s_sender_receiver,
+    const rct::key &origin_pubkey,
+    crypto::public_key &sender_extension_pubkey_out)
+{
+    // sra_g = H_n("..g..", s^ctx_sr, K_o)
+    crypto::secret_key sender_extension_g;
+    make_sparc_return_address_extension_g(s_sender_receiver, origin_pubkey, sender_extension_g);
+
+    // sra_t = H_n("..t..", s^ctx_sr, K_o)
+    crypto::secret_key sender_extension_t;
+    make_sparc_return_address_extension_t(s_sender_receiver, origin_pubkey, sender_extension_t);
+
+    // K^o_ext = sra_g G + sra_t T
+    rct::key sender_extension_pubkey_tmp;
+    rct::addKeys2(sender_extension_pubkey_tmp,
+        rct::sk2rct(sender_extension_g),
+        rct::sk2rct(sender_extension_t),
+        rct::pk2rct(crypto::get_T()));
+
+    sender_extension_pubkey_out = rct::rct2pk(sender_extension_pubkey_tmp);
+}
+//-------------------------------------------------------------------------------------------------------------------
 void make_sparc_return_address(const crypto::public_key &address_spend_pubkey,
                                const crypto::hash &s_sender_receiver,
-                               const input_context_t &input_context,
-                               const rct::key &amount_commitment,
+                               const rct::key &origin_pubkey,
                                crypto::public_key &return_address_out)
 {
+    // K^o_ext = sra_g G + sra_t T
+    crypto::public_key sender_extension_pubkey;
+    make_sparc_return_address_extension_pubkey(s_sender_receiver, origin_pubkey, sender_extension_pubkey);
+
+    // K_r = K_c + K^o_ext
+    return_address_out = rct::rct2pk(rct::addKeys(
+        rct::pk2rct(address_spend_pubkey), rct::pk2rct(sender_extension_pubkey)));
+    /*
     // Calculate the k_rp value
     crypto::secret_key k_rp;
     make_carrot_onetime_address_extension_rp(s_sender_receiver, input_context, k_rp);
@@ -292,6 +330,7 @@ void make_sparc_return_address(const crypto::public_key &address_spend_pubkey,
     ge_p3 K_r_p3;
     ge_scalarmult_p3(&K_r_p3, to_bytes(k_inv_rp), &K_sra_p3);
     ge_p3_tobytes((unsigned char *)(return_address_out.data), &K_r_p3);
+    */
 }
 //-------------------------------------------------------------------------------------------------------------------
 void make_carrot_amount_blinding_factor(const crypto::hash &s_sender_receiver,

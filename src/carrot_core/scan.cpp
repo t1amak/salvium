@@ -140,7 +140,7 @@ static bool try_scan_carrot_external_noamount(const crypto::public_key &onetime_
         nominal_janus_anchor);
 
     // K_sra = k_rp K_r
-    make_sparc_return_address(onetime_address, s_sender_receiver_out, input_context, amount_commitment, return_address_out);
+    make_sparc_return_address(onetime_address, s_sender_receiver_out, amount_commitment, return_address_out);
     
     return verify_carrot_janus_protection(input_context,
         onetime_address,
