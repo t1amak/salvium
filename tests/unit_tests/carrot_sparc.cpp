@@ -275,8 +275,7 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
                                                              recovered_amount,
                                                              recovered_amount_blinding_factor,
                                                              recovered_payment_id,
-                                                             recovered_enote_type,
-                                                             recovered_return_address_pubkey);
+                                                             recovered_enote_type);
     
     ASSERT_TRUE(scan_success);
 
@@ -380,20 +379,20 @@ TEST(carrot_sparc, main_address_return_payment_normal_scan_completeness)
     crypto::secret_key recovered_amount_blinding_factor_return;
     encrypted_payment_id_t recovered_payment_id_return;
     CarrotEnoteType recovered_enote_type_return;
-    crypto::public_key recovered_return_address_pubkey_return;
-    const bool scan_success_return = try_scan_carrot_enote_external(enote_proposal_return.enote,
-                                                                    encrypted_payment_id_return,
-                                                                    s_sender_receiver_unctx_return,
-                                                                    alice.k_view_incoming_dev,
-                                                                    alice.carrot_account_spend_pubkey,
-                                                                    recovered_sender_extension_g_return,
-                                                                    recovered_sender_extension_t_return,
-                                                                    recovered_address_spend_pubkey_return,
-                                                                    recovered_amount_return,
-                                                                    recovered_amount_blinding_factor_return,
-                                                                    recovered_payment_id_return,
-                                                                    recovered_enote_type_return,
-                                                                    recovered_return_address_pubkey_return);
+    const CarrotEnoteV1 origin_enote = enote_proposal_out.enote;
+    const bool scan_success_return = try_scan_sparc_enote_return(enote_proposal_return.enote,
+                                                                 origin_enote,
+                                                                 encrypted_payment_id_return,
+                                                                 s_sender_receiver_unctx_return,
+                                                                 alice.k_view_incoming_dev,
+                                                                 alice.carrot_account_spend_pubkey,
+                                                                 recovered_sender_extension_g_return,
+                                                                 recovered_sender_extension_t_return,
+                                                                 recovered_address_spend_pubkey_return,
+                                                                 recovered_amount_return,
+                                                                 recovered_amount_blinding_factor_return,
+                                                                 recovered_payment_id_return,
+                                                                 recovered_enote_type_return);
     
     ASSERT_TRUE(scan_success_return);
     

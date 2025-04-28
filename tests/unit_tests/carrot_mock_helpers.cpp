@@ -335,8 +335,7 @@ void mock_scan_enote_set(const std::vector<CarrotEnoteV1> &enotes,
                                            scan_result.amount,
                                            scan_result.amount_blinding_factor,
                                            scan_result.payment_id,
-                                           scan_result.enote_type,
-                                           scan_result.return_address_pubkey))
+                                           scan_result.enote_type))
         {
             res.push_back(scan_result);
             continue;

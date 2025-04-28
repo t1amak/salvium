@@ -236,7 +236,6 @@ public:
         rct::xmr_amount recovered_amount;
         carrot::payment_id_t recovered_payment_id;
         carrot::CarrotEnoteType recovered_enote_type;
-        crypto::public_key recovered_return_address_pubkey;
         if (!carrot::try_scan_carrot_enote_external(m_enote,
                                                     m_encrypted_payment_id,
                                                     s_sender_receiver_unctx,
@@ -248,8 +247,7 @@ public:
                                                     recovered_amount,
                                                     _3,
                                                     recovered_payment_id,
-                                                    recovered_enote_type,
-                                                    recovered_return_address_pubkey))
+                                                    recovered_enote_type))
             return false;
 
         if (recovered_address_spend_pubkey != subaddress.address_spend_pubkey)
@@ -282,7 +280,6 @@ public:
         rct::xmr_amount recovered_amount;
         carrot::payment_id_t recovered_payment_id;
         carrot::CarrotEnoteType recovered_enote_type;
-        crypto::public_key recovered_return_address_pubkey;
         const bool scan_success = carrot::try_scan_carrot_enote_external(m_enote,
                                                                          m_encrypted_payment_id,
                                                                          s_sender_receiver_unctx,
@@ -294,8 +291,7 @@ public:
                                                                          recovered_amount,
                                                                          _3,
                                                                          recovered_payment_id,
-                                                                         recovered_enote_type,
-                                                                         recovered_return_address_pubkey);
+                                                                         recovered_enote_type);
 
         return scan_success ^ m_test_view_tag_check;
     }

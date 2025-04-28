@@ -269,8 +269,7 @@ std::optional<enote_view_incoming_scan_info_t> try_view_incoming_scan_enote_dest
                                                                          res.sender_extension_g,
                                                                          res.sender_extension_t,
                                                                          res.address_spend_pubkey,
-                                                                         carrot_payment_id,
-                                                                         res.return_address))
+                                                                         carrot_payment_id))
                 return std::nullopt;
 
             memcpy(&res.payment_id, &carrot_payment_id, sizeof(carrot_payment_id));

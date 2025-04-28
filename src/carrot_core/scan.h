@@ -145,8 +145,7 @@ bool try_ecdh_and_scan_carrot_coinbase_enote(
                                      rct::xmr_amount &amount_out,
                                      crypto::secret_key &amount_blinding_factor_out,
                                      payment_id_t &payment_id_out,
-                                     CarrotEnoteType &enote_type_out,
-                                     crypto::public_key &return_address_out);
+                                     CarrotEnoteType &enote_type_out);
  bool try_scan_carrot_enote_external(const CarrotEnoteV1 &enote,
                                      const std::optional<encrypted_payment_id_t> &encrypted_payment_id,
                                      const mx25519_pubkey &s_sender_receiver_unctx,
@@ -158,8 +157,7 @@ bool try_ecdh_and_scan_carrot_coinbase_enote(
                                      rct::xmr_amount &amount_out,
                                      crypto::secret_key &amount_blinding_factor_out,
                                      payment_id_t &payment_id_out,
-                                     CarrotEnoteType &enote_type_out,
-                                     crypto::public_key &return_address_out);
+                                     CarrotEnoteType &enote_type_out);
  bool try_ecdh_and_scan_carrot_enote_external(const CarrotEnoteV1 &enote,
                                               const std::optional<encrypted_payment_id_t> &encrypted_payment_id,
                                               const view_incoming_key_device &k_view_dev,
@@ -170,8 +168,7 @@ bool try_ecdh_and_scan_carrot_coinbase_enote(
                                               rct::xmr_amount &amount_out,
                                               crypto::secret_key &amount_blinding_factor_out,
                                               payment_id_t &payment_id_out,
-                                              CarrotEnoteType &enote_type_out,
-                                              crypto::public_key &return_address_out);
+                                              CarrotEnoteType &enote_type_out);
  bool try_ecdh_and_scan_carrot_enote_external(const CarrotEnoteV1 &enote,
                                               const std::optional<encrypted_payment_id_t> &encrypted_payment_id,
                                               const view_incoming_key_device &k_view_dev,
@@ -182,8 +179,7 @@ bool try_ecdh_and_scan_carrot_coinbase_enote(
                                               rct::xmr_amount &amount_out,
                                               crypto::secret_key &amount_blinding_factor_out,
                                               payment_id_t &payment_id_out,
-                                              CarrotEnoteType &enote_type_out,
-                                              crypto::public_key &return_address_out);
+                                              CarrotEnoteType &enote_type_out);
  /**
   * brief: try_scan_carrot_enote_internal - attempt full scan process on internal enote
   * param: enote -
@@ -228,7 +224,49 @@ bool try_ecdh_and_scan_carrot_coinbase_enote(
                                                       crypto::secret_key &sender_extension_g_out,
                                                       crypto::secret_key &sender_extension_t_out,
                                                       crypto::public_key &address_spend_pubkey_out,
-                                                      payment_id_t &payment_id_out,
-                                                      crypto::public_key &return_address_out);
+                                                      payment_id_t &payment_id_out);
 
+/**
+ * brief: try_scan_carrot_enote_external - attempt full scan process on external enote
+ * param: enote -
+ * param: encrypted_payment_id - pid_enc
+ * param: s_sender_receiver_unctx - s_sr
+ * param: k_view_dev -
+ * param: main_address_spend_pubkey - K^0_s
+ * param: main_address_spend_pubkeys - {K^0_s, ...}
+ * param: sender_extension_g_out - k^g_o
+ * param: sender_extension_g_out - k^t_o
+ * param: address_spend_pubkey_out - K^j_s
+ * param: amount_out - a
+ * param: amount_blinding_factor_out - k_a
+ * param: payment_id_out - pid
+ * param: enote_type_out - enote_type
+ * return: true iff the scan process succeeded
+ */
+ bool try_scan_sparc_enote_return(const CarrotEnoteV1 &enote,
+                                  const CarrotEnoteV1 &origin_enote,
+                                  const std::optional<encrypted_payment_id_t> &encrypted_payment_id,
+                                  const mx25519_pubkey &s_sender_receiver_unctx,
+                                  const view_incoming_key_device &k_view_dev,
+                                  const crypto::public_key &main_address_spend_pubkey,
+                                  crypto::secret_key &sender_extension_g_out,
+                                  crypto::secret_key &sender_extension_t_out,
+                                  crypto::public_key &address_spend_pubkey_out,
+                                  rct::xmr_amount &amount_out,
+                                  crypto::secret_key &amount_blinding_factor_out,
+                                  payment_id_t &payment_id_out,
+                                  CarrotEnoteType &enote_type_out);
+ bool try_scan_sparc_enote_return(const CarrotEnoteV1 &enote,
+                                  const CarrotEnoteV1 &origin_enote,
+                                  const std::optional<encrypted_payment_id_t> &encrypted_payment_id,
+                                  const mx25519_pubkey &s_sender_receiver_unctx,
+                                  const view_incoming_key_device &k_view_dev,
+                                  const epee::span<const crypto::public_key> &main_address_spend_pubkeys,
+                                  crypto::secret_key &sender_extension_g_out,
+                                  crypto::secret_key &sender_extension_t_out,
+                                  crypto::public_key &address_spend_pubkey_out,
+                                  rct::xmr_amount &amount_out,
+                                  crypto::secret_key &amount_blinding_factor_out,
+                                  payment_id_t &payment_id_out,
+                                  CarrotEnoteType &enote_type_out);
 } //namespace carrot

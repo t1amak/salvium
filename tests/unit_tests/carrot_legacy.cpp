@@ -123,8 +123,7 @@ static void unittest_legacy_scan_enote_set(const std::vector<CarrotEnoteV1> &eno
                                                       scan_result.amount,
                                                       scan_result.amount_blinding_factor,
                                                       scan_result.payment_id,
-                                                      scan_result.enote_type,
-                                                      scan_result.return_address_pubkey);
+                                                      scan_result.enote_type);
         
         scan_result.output_index = output_index;
 
