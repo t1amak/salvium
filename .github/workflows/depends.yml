@@ -1,6 +1,9 @@
 name: ci/gh-actions/depends
 
+
 on:
+  workflow_dispatch:
+  
   push:
     paths-ignore:
       - 'docs/**'
