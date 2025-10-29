@@ -1,17 +1,17 @@
 name: ci/gh-actions/depends
 
-
 on:
   workflow_dispatch:
-  
   push:
     paths-ignore:
       - 'docs/**'
       - '**/README.md'
+      - '.github/workflows/**'
   pull_request:
     paths-ignore:
       - 'docs/**'
       - '**/README.md'
+      - '.github/workflows/**'
 
 env:
   APT_SET_CONF: |
@@ -39,8 +39,8 @@ jobs:
           - name: "ARM v7"
             host: "arm-linux-gnueabihf"
             packages: "python3 gperf g++-arm-linux-gnueabihf"
-            # FIX 1: Pass CFLAGS/CXXFLAGS to specify a CPU with a hardware FPU
-            build_flags: "CFLAGS='-march=armv7-a -mfpu=neon-vfpv4' CXXFLAGS='-march=armv7-a -mfpu=neon-vfpv4'"
+            # FIX 1 (Revised): Pass flags as HOST_ prefixed variables for the 'depends' makefile
+            build_flags: "HOST_CFLAGS='-march=armv7-a -mfpu=neon-vfpv4' HOST_CXXFLAGS='-march=armv7-a -mfpu=neon-vfpv4'"
           - name: "ARM v8"
             host: "aarch64-linux-gnu"
             packages: "python3 gperf g++-aarch64-linux-gnu"
@@ -71,11 +71,11 @@ jobs:
             build_flags: ""
           - name: "x86_64 Freebsd"
             host: "x86_64-unknown-freebsd"
-            # FIX 2: Replaced clang-8 with clang-14 (available on ubuntu-22.04)
-            packages: "clang-14 gperf cmake python3-zmq libdbus-1-dev libharfbuzz-dev"
+            # FIX 2: Reverted to clang-8, as it is mandatory
+            packages: "clang-8 gperf cmake python3-zmq libdbus-1-dev libharfbuzz-dev"
             build_flags: ""
               #          - name: "ARMv8 Android"
-              #            host: "aarch64-linux-android"
+              #            host: "aarch66-linux-android"
               #            packages: "gperf cmake python3"
               #            build_flags: ""
 
@@ -115,6 +115,14 @@ jobs:
     - name: set apt conf
       run: ${{env.APT_SET_CONF}}
 
+    # NEW STEP: Add LLVM 8 repository, but only for the FreeBSD job
+    - name: install clang-8 repo
+      if: ${{ matrix.toolchain.host == 'x86_64-unknown-freebsd' }}
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 8
+
     - name: install dependencies
       run: sudo apt update; sudo apt -y install build-essential libtool libssl-dev cmake autotools-dev automake pkg-config bsdmainutils curl git ca-certificates ccache ${{ matrix.toolchain.packages }}
 
@@ -153,3 +161,4 @@ jobs:
         aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws_region: eu-west-1
         flags: --acl public-read
+
