@@ -10,8 +10,8 @@ define $(package)_extract_cmds
 endef
 define $(package)_build_cmds
 	mkdir bin &&\
-	echo "#!/bin/sh\n\nexec /usr/bin/clang-14 -target x86_64-unknown-freebsd$($(package)_version) --sysroot=$(host_prefix)/native $$$$""@" > bin/clang-14 &&\
-	echo "#!/bin/sh\n\nexec /usr/bin/clang++-14 -target x86_64-unknown-freebsd$($(package)_version) --sysroot=$(host_prefix)/native -isystem $(host_prefix)/native/usr/include/c++/v1 $$$$""@" > bin/clang++-14 &&\
+	echo "#!/bin/sh\n\nexec /usr/bin/clang-14 -target x86_64-unknown-freebsd$($(package)_version) --sysroot=$(host_prefix)/native -L$(host_prefix)/native/usr/lib $$$$""@" > bin/clang-14 &&\
+	echo "#!/bin/sh\n\nexec /usr/bin/clang++-14 -target x86_64-unknown-freebsd$($(package)_version) --sysroot=$(host_prefix)/native -isystem $(host_prefix)/native/usr/include/c++/v1 -L$(host_prefix)/native/usr/lib $$$$""@" > bin/clang++-14 &&\
 	chmod 755 bin/*
 endef
 define $(package)_stage_cmds
